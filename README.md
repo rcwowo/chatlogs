@@ -1,3 +1,5 @@
+![Showcase Card](/public/static/twitter-card.webp)
+
 <div align="center">
 
 # Chat Replay Archive
