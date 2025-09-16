@@ -9,6 +9,8 @@ Public repository of chat replays for [vods.ltwilson.tv](https://vods.ltwilson.t
 
 This repository is purely to store the chatlogs from my livestreams and make them publicly accessible as an archive. They are also used to display them in real time for VODS on [vod-archive](https://github.com/theltwilson/vod-archive) project.
 
+This repo is just an archive, but the contents within this archive shall not be used to train AI models as defined by the [MIT NON-AI License](LICENSE).
+
 ## How does it work?
 
 Each `.json` file contains all the necessary information needed to recreate chat history programatically. Using the [Twitch Downloader](https://github.com/lay295/TwitchDownloader) project, I can download the chatlog and subsequently sort it to be committed to this repo.
