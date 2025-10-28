@@ -3,13 +3,13 @@
 <div align="center">
 
 # Chat Replay Archive
-Public repository of chat replays for [vods.ltwilson.tv](https://vods.ltwilson.tv)!
+Public repository of chat replays for [vods.rcw.lol](https://vods.rcw.lol)!
 
 </div>
 
 ## About this repo.
 
-This repository is purely to store the chatlogs from my livestreams and make them publicly accessible as an archive. They are also used to display them in real time for VODS on [vod-archive](https://github.com/theltwilson/vod-archive) project.
+This repository is purely to store the chatlogs from my livestreams and make them publicly accessible as an archive. They are also used to display them in real time for VODS on [vod-archive](https://github.com/rcwowo/vod-archive) project.
 
 This repo is just an archive, but the contents within this archive shall not be used to train AI models as defined by the [MIT NON-AI License](LICENSE).
 
