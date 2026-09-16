@@ -11,5 +11,9 @@ export function readJson<T>(key: string, fallback: T): T {
 }
 
 export function writeJson(key: string, value: unknown) {
-  localStorage.setItem(key, JSON.stringify(value))
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    return
+  }
 }

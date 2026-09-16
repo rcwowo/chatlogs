@@ -62,14 +62,21 @@ export function LogsPanel({
 }) {
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [filterOpen, setFilterOpen] = useState(false)
-  const [newestAtBottom, setNewestAtBottom] = useState(() =>
-    readJson(ORDER_STORAGE_KEY, true)
-  )
+  const [newestAtBottom, setNewestAtBottom] = useState(() => {
+    const stored = readJson<unknown>(ORDER_STORAGE_KEY, true)
+    return typeof stored === "boolean" ? stored : true
+  })
   const [highlightedSuggestion, setHighlightedSuggestion] = useState(0)
 
   useEffect(() => {
     writeJson(ORDER_STORAGE_KEY, newestAtBottom)
   }, [newestAtBottom])
+
+  function toggleDirection() {
+    const next = !newestAtBottom
+    writeJson(ORDER_STORAGE_KEY, next)
+    setNewestAtBottom(next)
+  }
 
   const messages = logs.status === "ready" ? logs.messages : []
   const usernames = useMemo(
@@ -183,7 +190,7 @@ export function LogsPanel({
                 ? "New messages start at the bottom. Switch to top."
                 : "New messages start at the top. Switch to bottom."
             }
-            onClick={() => setNewestAtBottom((current) => !current)}
+            onClick={toggleDirection}
           >
             {newestAtBottom ? (
               <ArrowDownWideNarrowIcon />
