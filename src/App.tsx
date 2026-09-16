@@ -136,11 +136,11 @@ export function App() {
                   date={effectiveDate}
                   dates={dates}
                   userFilter={query.user}
-                  textFilter={query.q}
+                  filterQuery={query.q}
                   logs={logs}
                   catalog={catalog}
                   onUserFilter={(user) => setQuery({ user })}
-                  onTextFilter={(q) => setQuery({ q })}
+                  onFilterQuery={(q) => setQuery({ q })}
                   onDateChange={(date) => setQuery({ date, tab: "logs" })}
                 />
               </UserCardProvider>

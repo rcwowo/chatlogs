@@ -12,11 +12,13 @@ export function LogViewer({
   total,
   badges,
   emotes,
+  newestAtBottom = true,
 }: {
   messages: MergedMessage[]
   total: number
   badges: ChatBadgeCatalog
   emotes: ThirdPartyEmoteCatalog
+  newestAtBottom?: boolean
 }) {
   const parentRef = useRef<HTMLDivElement>(null)
 
@@ -33,11 +35,15 @@ export function LogViewer({
       return
     }
     const frame = requestAnimationFrame(() => {
-      virtualizer.scrollToIndex(messages.length - 1, { align: "end" })
+      if (newestAtBottom) {
+        virtualizer.scrollToIndex(messages.length - 1, { align: "end" })
+      } else {
+        virtualizer.scrollToIndex(0, { align: "start" })
+      }
     })
     return () => cancelAnimationFrame(frame)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [newestAtBottom])
 
   if (total === 0) {
     return (
@@ -50,11 +56,12 @@ export function LogViewer({
   if (messages.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        Nothing matches that filter.
+        No messages match that filter.
       </div>
     )
   }
 
+  const ordered = newestAtBottom ? messages : [...messages].reverse()
   const items = virtualizer.getVirtualItems()
 
   return (
@@ -68,7 +75,7 @@ export function LogViewer({
           style={{ height: virtualizer.getTotalSize() }}
         >
           {items.map((item) => {
-            const message = messages[item.index]
+            const message = ordered[item.index]
             return (
               <div
                 key={message.key}

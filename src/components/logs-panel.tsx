@@ -1,5 +1,11 @@
-import { useMemo, useState, type ReactNode } from "react"
-import { CalendarDaysIcon, FilterIcon, SearchIcon, XIcon } from "lucide-react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import {
+  ArrowDownWideNarrowIcon,
+  ArrowUpNarrowWideIcon,
+  CalendarDaysIcon,
+  FilterIcon,
+  XIcon,
+} from "lucide-react"
 
 import { LogCalendar } from "@/components/log-calendar"
 import { LogUserCard } from "@/components/chat/user-card"
@@ -15,41 +21,113 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import type { ChatCatalog } from "@/hooks/use-chat-catalog"
 import type { DayLogsState } from "@/hooks/use-day-logs"
-import { filterLogMessages } from "@/lib/chat/filter"
 import { formatDateKey } from "@/lib/dates"
+import {
+  collectSearchUsernames,
+  getSearchSuggestions,
+  getSearchTokenAtCursor,
+  parseSearchQuery,
+  isSearchQueryActive,
+  removeSearchFilterRange,
+  replaceSearchToken,
+  searchLogMessages,
+} from "@/lib/chat/search"
+import { readJson, writeJson } from "@/lib/storage"
+
+const ORDER_STORAGE_KEY = "chatlogs.newestAtBottom"
 
 export function LogsPanel({
   channelLogin,
   date,
   dates,
   userFilter,
-  textFilter,
+  filterQuery,
   logs,
   catalog,
   onUserFilter,
-  onTextFilter,
+  onFilterQuery,
   onDateChange,
 }: {
   channelLogin: string
   date: string
   dates: string[]
   userFilter: string
-  textFilter: string
+  filterQuery: string
   logs: DayLogsState
   catalog: ChatCatalog
   onUserFilter: (user: string) => void
-  onTextFilter: (q: string) => void
+  onFilterQuery: (q: string) => void
   onDateChange: (date: string) => void
 }) {
   const [calendarOpen, setCalendarOpen] = useState(false)
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [newestAtBottom, setNewestAtBottom] = useState(() =>
+    readJson(ORDER_STORAGE_KEY, true)
+  )
+  const [highlightedSuggestion, setHighlightedSuggestion] = useState(0)
+
+  useEffect(() => {
+    writeJson(ORDER_STORAGE_KEY, newestAtBottom)
+  }, [newestAtBottom])
+
   const messages = logs.status === "ready" ? logs.messages : []
+  const usernames = useMemo(
+    () => collectSearchUsernames(messages),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [logs]
+  )
+  const parsed = useMemo(() => parseSearchQuery(filterQuery), [filterQuery])
+  const queryActive = isSearchQueryActive(parsed) || Boolean(userFilter.trim())
+
   const filtered = useMemo(
     () =>
       logs.status === "ready"
-        ? filterLogMessages(logs.messages, userFilter, textFilter)
+        ? searchLogMessages(logs.messages, filterQuery, userFilter, catalog.emotes)
         : [],
-    [logs, textFilter, userFilter]
+    [logs, catalog, filterQuery, userFilter]
   )
+  const [caret, setCaret] = useState(filterQuery.length)
+
+  function updateCaret(next: number) {
+    setCaret(next)
+  }
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const suggestions = useMemo(() => {
+    if (!filterOpen) {
+      return []
+    }
+    const token = getSearchTokenAtCursor(filterQuery, caret)
+    return getSearchSuggestions({ token, usernames })
+  }, [filterOpen, filterQuery, usernames, caret])
+
+  const token = getSearchTokenAtCursor(filterQuery, caret)
+  const activeSuggestion =
+    suggestions.length > 0
+      ? suggestions[Math.min(highlightedSuggestion, suggestions.length - 1)]!
+      : null
+
+  function rememberCaret() {
+    updateCaret(inputRef.current?.selectionStart ?? filterQuery.length)
+  }
+
+  function applySuggestion(insert: string) {
+    const result = replaceSearchToken(filterQuery, token, insert)
+    onFilterQuery(result.query)
+    updateCaret(result.cursor)
+    requestAnimationFrame(() => {
+      const input = inputRef.current
+      if (input) {
+        input.focus()
+        input.setSelectionRange(result.cursor, result.cursor)
+      }
+    })
+  }
+
+  function removeFilterAt(start: number, end: number) {
+    onFilterQuery(removeSearchFilterRange(filterQuery, start, end))
+  }
+
   const visibleCount = filtered.length
 
   return (
@@ -79,85 +157,150 @@ export function LogsPanel({
         </p>
 
         <div className="ml-auto flex items-center gap-2">
-          <Popover>
-            <PopoverTrigger
-              render={
-                <Button
-                  type="button"
-                  size="icon"
-                  variant={textFilter ? "secondary" : "ghost"}
-                  className={cn(
-                    "rounded-full text-muted-foreground hover:text-foreground",
-                    !textFilter && "bg-background"
-                  )}
-                  aria-label="Search this day"
-                />
-              }
-            >
-              <SearchIcon />
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-72">
-              <div className="flex items-center gap-2">
-                <Input
-                  value={textFilter}
-                  onChange={(event) => onTextFilter(event.target.value)}
-                  placeholder="Search this day"
-                  autoComplete="off"
-                  autoFocus
-                />
-                {textFilter ? (
-                  <Button
-                    type="button"
-                    size="icon-xs"
-                    variant="ghost"
-                    aria-label="Clear search"
-                    onClick={() => onTextFilter("")}
-                  >
-                    <XIcon />
-                  </Button>
-                ) : null}
-              </div>
-            </PopoverContent>
-          </Popover>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="rounded-full bg-background text-muted-foreground hover:text-foreground"
+            aria-label={
+              newestAtBottom
+                ? "New messages start at the bottom. Switch to top."
+                : "New messages start at the top. Switch to bottom."
+            }
+            onClick={() => setNewestAtBottom((current) => !current)}
+          >
+            {newestAtBottom ? (
+              <ArrowDownWideNarrowIcon />
+            ) : (
+              <ArrowUpNarrowWideIcon />
+            )}
+          </Button>
 
-          <Popover>
+          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
             <PopoverTrigger
               render={
                 <Button
                   type="button"
                   size="icon"
-                  variant={userFilter ? "secondary" : "ghost"}
+                  variant={queryActive ? "secondary" : "ghost"}
                   className={cn(
-                    "rounded-full text-muted-foreground hover:text-foreground",
-                    !userFilter && "bg-background"
+                    "rounded-full",
+                    queryActive
+                      ? "bg-purple-500/20 text-purple-600 hover:text-purple-600 dark:bg-purple-400/20 dark:text-purple-300 dark:hover:text-purple-300"
+                      : "bg-background text-muted-foreground hover:text-foreground"
                   )}
-                  aria-label="Filter by chatter"
+                  aria-label="Filter messages"
                 />
               }
             >
               <FilterIcon />
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-72">
-              <div className="flex items-center gap-2">
-                <Input
-                  value={userFilter}
-                  onChange={(event) => onUserFilter(event.target.value)}
-                  placeholder="Filter by chatter"
-                  autoComplete="off"
-                  autoFocus
-                />
-                {userFilter ? (
-                  <Button
+            <PopoverContent align="end" className="w-80">
+              {parsed.filters.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {parsed.filters.map((filter) => (
+                    <button
+                      key={`${filter.key}:${filter.value}:${filter.start}`}
+                      type="button"
+                      className="flex items-center gap-1 rounded-md bg-purple-500/15 px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-500/25 dark:bg-purple-400/15 dark:text-purple-200 dark:hover:bg-purple-400/25"
+                      aria-label={`Remove ${filter.key} filter`}
+                      onClick={() => removeFilterAt(filter.start, filter.end)}
+                    >
+                      <span className="text-muted-foreground">
+                        {filter.key}:
+                      </span>
+                      {filter.value}
+                      <XIcon className="size-3 text-muted-foreground" />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              <Input
+                ref={inputRef}
+                value={filterQuery}
+                onChange={(event) => {
+                  onFilterQuery(event.target.value)
+                  updateCaret(event.target.selectionStart ?? 0)
+                  setHighlightedSuggestion(0)
+                }}
+                onKeyUp={rememberCaret}
+                onClick={rememberCaret}
+                onFocus={rememberCaret}
+                onKeyDown={(event) => {
+                  updateCaret(event.currentTarget.selectionStart ?? caret)
+
+                  if (suggestions.length > 0) {
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault()
+                      setHighlightedSuggestion(
+                        (current) => (current + 1) % suggestions.length
+                      )
+                      return
+                    }
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault()
+                      setHighlightedSuggestion(
+                        (current) =>
+                          (current - 1 + suggestions.length) % suggestions.length
+                      )
+                      return
+                    }
+                    if (/^(?:Enter|Tab)$/.test(event.key) && activeSuggestion) {
+                      event.preventDefault()
+                      applySuggestion(activeSuggestion.insert)
+                      return
+                    }
+                  }
+                }}
+                placeholder="Filter messages. Try from:, role: or has:"
+                autoComplete="off"
+                autoFocus
+              />
+
+              {userFilter && !filterQuery.includes("from:") ? (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <button
                     type="button"
-                    size="icon-xs"
-                    variant="ghost"
-                    aria-label="Clear chatter filter"
+                    className="flex items-center gap-1 rounded-md bg-purple-500/15 px-2 py-1 font-medium text-purple-700 hover:bg-purple-500/25 dark:bg-purple-400/15 dark:text-purple-200 dark:hover:bg-purple-400/25"
                     onClick={() => onUserFilter("")}
                   >
-                    <XIcon />
-                  </Button>
-                ) : null}
-              </div>
+                    <span className="text-muted-foreground">from:</span>
+                    {userFilter}
+                    <XIcon className="size-3" />
+                  </button>
+                </div>
+              ) : null}
+
+              {activeSuggestion ? (
+                <div className="flex flex-col gap-0.5">
+                  {suggestions.map((suggestion, index) => (
+                    <button
+                      key={suggestion.id}
+                      type="button"
+                      className={cn(
+                        "flex items-baseline gap-2 rounded-md px-2 py-1 text-left text-xs",
+                        index ===
+                          Math.min(
+                            highlightedSuggestion,
+                            suggestions.length - 1
+                          ) &&
+                          "bg-purple-500/10 dark:bg-purple-400/10"
+                      )}
+                      onMouseEnter={() => setHighlightedSuggestion(index)}
+                      onMouseDown={(event) => {
+                        event.preventDefault()
+                        applySuggestion(suggestion.insert)
+                      }}
+                    >
+                      <span className="font-medium">{suggestion.label}</span>
+                      <span className="truncate text-muted-foreground">
+                        {suggestion.description}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </PopoverContent>
           </Popover>
 
@@ -217,6 +360,7 @@ export function LogsPanel({
             total={logs.messages.length}
             badges={catalog.badges}
             emotes={catalog.emotes}
+            newestAtBottom={newestAtBottom}
           />
         ) : null}
 
