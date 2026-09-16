@@ -61,7 +61,7 @@ export function LogViewer({
     )
   }
 
-  const ordered = newestAtBottom ? messages : [...messages].reverse()
+  const count = messages.length
   const items = virtualizer.getVirtualItems()
 
   return (
@@ -75,7 +75,13 @@ export function LogViewer({
           style={{ height: virtualizer.getTotalSize() }}
         >
           {items.map((item) => {
-            const message = ordered[item.index]
+            // Map the virtual index into the source array without copying or
+            // reversing tens of thousands of messages on every render.
+            const index = newestAtBottom ? item.index : count - 1 - item.index
+            const message = messages[index]
+            if (!message) {
+              return null
+            }
             return (
               <div
                 key={message.key}
@@ -84,11 +90,7 @@ export function LogViewer({
                 className="absolute top-0 left-0 w-full"
                 style={{ transform: `translateY(${item.start}px)` }}
               >
-                <LogMessage
-                  message={message}
-                  badges={badges}
-                  emotes={emotes}
-                />
+                <LogMessage message={message} badges={badges} emotes={emotes} />
               </div>
             )
           })}

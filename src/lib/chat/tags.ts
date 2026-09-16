@@ -97,7 +97,20 @@ function parseReply(tags: Record<string, string>): ChatReply | null {
   }
 }
 
+const parseCache = new WeakMap<MergedMessage, ParsedLogChat>()
+
 export function parseLogChat(message: MergedMessage): ParsedLogChat {
+  const cached = parseCache.get(message)
+  if (cached) {
+    return cached
+  }
+
+  const parsed = parseLogChatUncached(message)
+  parseCache.set(message, parsed)
+  return parsed
+}
+
+function parseLogChatUncached(message: MergedMessage): ParsedLogChat {
   const tags = message.tags
   const isChat = message.type === PRIVMSG || message.type === undefined
   const action = stripAction(message.text)
@@ -129,8 +142,7 @@ export function parseLogChat(message: MergedMessage): ParsedLogChat {
         badges.some(
           (badge) => badge.set === "subscriber" || badge.set === "founder"
         ),
-      isVip:
-        Boolean(tags.vip) || badges.some((badge) => badge.set === "vip"),
+      isVip: Boolean(tags.vip) || badges.some((badge) => badge.set === "vip"),
     },
     reply: parseReply(tags),
   }

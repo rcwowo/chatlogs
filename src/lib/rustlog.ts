@@ -1,4 +1,9 @@
-import { fromDateKey, mergeDateKeys, toDateKey, type AvailableLogDate } from "@/lib/dates"
+import {
+  fromDateKey,
+  mergeDateKeys,
+  toDateKey,
+  type AvailableLogDate,
+} from "@/lib/dates"
 import { fetchTimeout } from "@/lib/http"
 import type { Provider } from "@/lib/providers"
 import { parseTarget, type NamedTarget } from "@/lib/twitch"
@@ -72,7 +77,9 @@ function buildUrl(
 async function fetchJson<T>(
   url: string,
   signal?: AbortSignal
-): Promise<{ ok: true; data: T } | { ok: false; missing: boolean; error: string }> {
+): Promise<
+  { ok: true; data: T } | { ok: false; missing: boolean; error: string }
+> {
   try {
     const response = await fetchTimeout(url, {
       signal,
@@ -104,8 +111,7 @@ async function fetchJson<T>(
     if (signal?.aborted) {
       throw error
     }
-    const message =
-      error instanceof Error ? error.message : "Request failed"
+    const message = error instanceof Error ? error.message : "Request failed"
     return { ok: false, missing: false, error: message }
   }
 }
@@ -171,8 +177,10 @@ export function mergeMessages(
     }
   }
 
+  // Timestamps are ISO 8601 strings, so lexicographic comparison matches
+  // chronological order and is far cheaper than localeCompare.
   return [...byKey.values()].sort((a, b) =>
-    a.timestamp.localeCompare(b.timestamp)
+    a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0
   )
 }
 
@@ -335,9 +343,7 @@ export async function fetchChannelStats(
   }, null)
 
   return {
-    stats: best
-      ? { ...best.stats, providerId: best.providerId }
-      : null,
+    stats: best ? { ...best.stats, providerId: best.providerId } : null,
     statuses: results.map(({ providerId, status, error }) => ({
       providerId,
       status,

@@ -1,12 +1,9 @@
-import { useMemo, useRef } from "react"
+import { memo, useMemo, useRef } from "react"
 
 import { ChatBadgeList } from "@/components/chat/badge"
 import { ChatMessageBody } from "@/components/chat/message-body"
 import { useUserCardOptional } from "@/hooks/use-user-card"
-import {
-  resolveMessageBadges,
-  type ChatBadgeCatalog,
-} from "@/lib/chat/badges"
+import { resolveMessageBadges, type ChatBadgeCatalog } from "@/lib/chat/badges"
 import {
   hydrateMessageEmotes,
   type ThirdPartyEmoteCatalog,
@@ -19,7 +16,7 @@ import {
 } from "@/lib/chat/username"
 import type { MergedMessage } from "@/lib/rustlog"
 
-export function LogMessage({
+export const LogMessage = memo(function LogMessage({
   message,
   badges,
   emotes,
@@ -87,9 +84,7 @@ export function LogMessage({
           )}
           <span
             className={parsed.flags.isAction ? "chat-action italic" : "inline"}
-            style={
-              parsed.flags.isAction && color ? { color } : undefined
-            }
+            style={parsed.flags.isAction && color ? { color } : undefined}
           >
             <ChatMessageBody text={parsed.text} emotes={hydrated} />
           </span>
@@ -121,11 +116,13 @@ export function LogMessage({
           <span className="chat-announcement-header flex items-center px-3 py-1 text-xs font-medium">
             First message
           </span>
-          <div className="chat-announcement-body px-3 py-1.5">{messageContent}</div>
+          <div className="chat-announcement-body px-3 py-1.5">
+            {messageContent}
+          </div>
         </div>
       ) : (
         messageContent
       )}
     </div>
   )
-}
+})

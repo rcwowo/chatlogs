@@ -1,10 +1,8 @@
 import { matchChatMentions } from "@/lib/chat/mentions"
 import { findMessageUrls } from "@/lib/chat/urls"
 import { parseLogChat, unescapeIrcTag } from "@/lib/chat/tags"
-import {
-  hydrateMessageEmotes,
-  type ThirdPartyEmoteCatalog,
-} from "@/lib/chat/emotes"
+import type { ParsedLogChat } from "@/lib/chat/types"
+import type { ThirdPartyEmoteCatalog } from "@/lib/chat/emotes"
 import type { MergedMessage } from "@/lib/rustlog"
 
 export const SEARCH_FILTER_KEYS = ["from", "role", "has"] as const
@@ -297,116 +295,97 @@ function normalizeUserFilter(value: string) {
   return value.trim().replace(/^@/, "").toLowerCase()
 }
 
-function messageMatchesFrom(message: MergedMessage, value: string) {
-  const needle = normalizeUserFilter(value)
-  if (!needle) {
-    return false
-  }
-
-  return (
-    message.username.toLowerCase() === needle ||
-    message.displayName.toLowerCase() === needle
-  )
-}
-
 function extractGifUrls(text: string) {
   const pattern = /https?:\/\/[^\s]+?\.(?:gif|gifv)(?:\?\S*)?/gi
   return text.match(pattern) ?? []
 }
 
-function messageMatchesRole(message: MergedMessage, value: string) {
-  const flags = parseLogChat(message).flags
+type RoleKind = "mod" | "vip" | "sub" | "broadcaster"
+
+function roleFilterKind(value: string): RoleKind | null {
   switch (value.trim().toLowerCase()) {
     case "mod":
     case "moderator":
-      return flags.isModerator
+      return "mod"
     case "vip":
-      return flags.isVip
+      return "vip"
     case "sub":
     case "subscriber":
-      return flags.isSubscriber
+      return "sub"
     case "broadcaster":
     case "streamer":
     case "streamers":
-      return flags.isBroadcaster
+      return "broadcaster"
     default:
-      return false
+      return null
   }
 }
 
-function messageMatchesHas(
-  message: MergedMessage,
-  value: string,
-  emotes: ThirdPartyEmoteCatalog | null
-) {
-  const parsed = parseLogChat(message)
+type HasKind = "link" | "emote" | "gif" | "mention"
+
+function hasFilterKind(value: string): HasKind | null {
   switch (value.trim().toLowerCase()) {
     case "link":
     case "links":
     case "url":
+      return "link"
+    case "emote":
+    case "emotes":
+      return "emote"
+    case "gif":
+    case "gifs":
+      return "gif"
+    case "mention":
+    case "mentions":
+      return "mention"
+    default:
+      return null
+  }
+}
+
+function hasThirdPartyEmoteCode(
+  text: string,
+  emotes: ThirdPartyEmoteCatalog | null
+) {
+  if (!emotes || emotes.size === 0 || !text) {
+    return false
+  }
+  for (const match of text.matchAll(/\S+/g)) {
+    if (emotes.has(match[0])) {
+      return true
+    }
+  }
+  return false
+}
+
+function messageHasKind(
+  parsed: ParsedLogChat,
+  message: MergedMessage,
+  kind: HasKind,
+  emotes: ThirdPartyEmoteCatalog | null
+) {
+  switch (kind) {
+    case "link":
       return (
         findMessageUrls(parsed.text).length > 0 ||
         findMessageUrls(parsed.systemText).length > 0
       )
     case "emote":
-    case "emotes":
-      return hydrateMessageEmotes(parsed.text, parsed.emotes, emotes).length > 0
+      return (
+        parsed.emotes.length > 0 || hasThirdPartyEmoteCode(parsed.text, emotes)
+      )
     case "gif":
-    case "gifs":
       return (
         Boolean(unescapeIrcTag(message.tags.gifs ?? "")) ||
         extractGifUrls(parsed.text).length > 0
       )
-    case "mention":
-    case "mentions": {
+    case "mention": {
       for (const _match of matchChatMentions(parsed.text)) {
         return true
       }
       return false
     }
-    default:
-      return false
   }
-}
-
-function messageMatchesFilters(
-  message: MergedMessage,
-  parsed: ParsedSearchQuery,
-  senderFilter: string,
-  emotes: ThirdPartyEmoteCatalog | null
-) {
-  const fromFilters = parsed.filters.filter((filter) => filter.key === "from")
-  const sender = senderFilter.trim()
-
-  if (sender && fromFilters.length === 0) {
-    if (!messageMatchesFrom(message, sender)) {
-      return false
-    }
-  }
-
-  if (
-    fromFilters.length > 0 &&
-    !fromFilters.some((filter) => messageMatchesFrom(message, filter.value))
-  ) {
-    return false
-  }
-
-  const roleFilters = parsed.filters.filter((filter) => filter.key === "role")
-  if (
-    roleFilters.length > 0 &&
-    !roleFilters.some((filter) => messageMatchesRole(message, filter.value))
-  ) {
-    return false
-  }
-
-  const hasFilters = parsed.filters.filter((filter) => filter.key === "has")
-  for (const filter of hasFilters) {
-    if (!messageMatchesHas(message, filter.value, emotes)) {
-      return false
-    }
-  }
-
-  return true
 }
 
 export function searchLogMessages(
@@ -416,15 +395,102 @@ export function searchLogMessages(
   emotes: ThirdPartyEmoteCatalog | null = null
 ): MergedMessage[] {
   const parsed = parseSearchQuery(query)
-  if (!isSearchQueryActive(parsed) && !senderFilter.trim()) {
+  const sender = senderFilter.trim()
+  if (!isSearchQueryActive(parsed) && !sender) {
     return messages
+  }
+
+  const fromNeedles = new Set<string>()
+  if (sender) {
+    const needle = normalizeUserFilter(sender)
+    if (needle) {
+      fromNeedles.add(needle)
+    }
+  }
+  for (const filter of parsed.filters) {
+    if (filter.key !== "from") {
+      continue
+    }
+    const needle = normalizeUserFilter(filter.value)
+    if (needle) {
+      fromNeedles.add(needle)
+    }
+  }
+
+  const roleKinds: RoleKind[] = []
+  const hasKinds: HasKind[] = []
+  for (const filter of parsed.filters) {
+    if (filter.key === "role") {
+      const kind = roleFilterKind(filter.value)
+      if (kind) {
+        roleKinds.push(kind)
+      }
+    } else if (filter.key === "has") {
+      const kind = hasFilterKind(filter.value)
+      if (kind) {
+        hasKinds.push(kind)
+      }
+    }
+  }
+
+  const fromActive = Boolean(sender) || fromNeedles.size > 0
+  const roleActive = parsed.filters.some((filter) => filter.key === "role")
+  const hasActive = parsed.filters.some((filter) => filter.key === "has")
+
+  // An active filter group with nothing valid to match against can never
+  // pass, so short-circuit instead of scanning every message.
+  if (
+    (fromActive && fromNeedles.size === 0) ||
+    (roleActive && roleKinds.length === 0) ||
+    (hasActive && hasKinds.length === 0)
+  ) {
+    return []
   }
 
   const lowerKeywords = parsed.keywords.map((keyword) => keyword.toLowerCase())
 
   return messages.filter((message) => {
-    if (!messageMatchesFilters(message, parsed, senderFilter, emotes)) {
-      return false
+    if (fromActive) {
+      const username = message.username.toLowerCase()
+      const displayName = message.displayName.toLowerCase()
+      let matched = false
+      for (const needle of fromNeedles) {
+        if (username === needle || displayName === needle) {
+          matched = true
+          break
+        }
+      }
+      if (!matched) {
+        return false
+      }
+    }
+
+    if (roleActive) {
+      const flags = parseLogChat(message).flags
+      let matched = false
+      for (const kind of roleKinds) {
+        if (
+          (kind === "mod" && flags.isModerator) ||
+          (kind === "vip" && flags.isVip) ||
+          (kind === "sub" && flags.isSubscriber) ||
+          (kind === "broadcaster" && flags.isBroadcaster)
+        ) {
+          matched = true
+          break
+        }
+      }
+      if (!matched) {
+        return false
+      }
+    }
+
+    if (hasActive) {
+      const parsedMessage = parseLogChat(message)
+      for (const kind of hasKinds) {
+        if (!messageHasKind(parsedMessage, message, kind, emotes)) {
+          return false
+        }
+      }
     }
 
     if (lowerKeywords.length > 0) {

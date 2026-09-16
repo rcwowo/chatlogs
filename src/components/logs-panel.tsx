@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { ChatCatalog } from "@/hooks/use-chat-catalog"
+import { useDebouncedValue } from "@/hooks/use-debounced-value"
 import type { DayLogsState } from "@/hooks/use-day-logs"
 import { formatDateKey } from "@/lib/dates"
 import {
@@ -79,13 +80,25 @@ export function LogsPanel({
   const parsed = useMemo(() => parseSearchQuery(filterQuery), [filterQuery])
   const queryActive = isSearchQueryActive(parsed) || Boolean(userFilter.trim())
 
+  // The full-list scan is expensive for large channels, so wait until typing
+  // settles before filtering. The raw query still drives the input,
+  // suggestions, and filter chips immediately.
+  const FILTER_SETTLE_MS = 200
+  const settledFilterQuery = useDebouncedValue(filterQuery, FILTER_SETTLE_MS)
+  const emotes = catalog.emotes
   const filtered = useMemo(
     () =>
       logs.status === "ready"
-        ? searchLogMessages(logs.messages, filterQuery, userFilter, catalog.emotes)
+        ? searchLogMessages(
+            logs.messages,
+            settledFilterQuery,
+            userFilter,
+            emotes
+          )
         : [],
-    [logs, catalog, filterQuery, userFilter]
+    [logs, emotes, settledFilterQuery, userFilter]
   )
+  const filterPending = settledFilterQuery !== filterQuery
   const [caret, setCaret] = useState(filterQuery.length)
 
   function updateCaret(next: number) {
@@ -150,6 +163,9 @@ export function LogsPanel({
                 </>
               ) : null}{" "}
               {visibleCount === 1 ? "message" : "messages"}
+              {filterPending ? (
+                <span className="ml-2 text-xs opacity-70">Filtering…</span>
+              ) : null}
             </>
           ) : (
             "Channel logs"
@@ -242,7 +258,8 @@ export function LogsPanel({
                       event.preventDefault()
                       setHighlightedSuggestion(
                         (current) =>
-                          (current - 1 + suggestions.length) % suggestions.length
+                          (current - 1 + suggestions.length) %
+                          suggestions.length
                       )
                       return
                     }
@@ -284,8 +301,7 @@ export function LogsPanel({
                           Math.min(
                             highlightedSuggestion,
                             suggestions.length - 1
-                          ) &&
-                          "bg-purple-500/10 dark:bg-purple-400/10"
+                          ) && "bg-purple-500/10 dark:bg-purple-400/10"
                       )}
                       onMouseEnter={() => setHighlightedSuggestion(index)}
                       onMouseDown={(event) => {
