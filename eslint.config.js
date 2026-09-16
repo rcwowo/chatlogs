@@ -18,5 +18,20 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      "no-empty": ["error", { allowEmptyCatch: true }],
+    },
+  },
+  {
+    files: [
+      "src/components/ui/**/*.{ts,tsx}",
+      "src/components/theme-provider.tsx",
+      "src/hooks/use-mobile.ts",
+      "src/hooks/use-user-card.tsx",
+    ],
+    rules: {
+      "react-refresh/only-export-components": "off",
+      "react-hooks/set-state-in-effect": "off",
+    },
   },
 ])
