@@ -70,7 +70,7 @@ export function ChannelHeader({
           className={cn(
             "rounded-full px-1",
             `transition-[height] ${SIDEBAR_TRANSITION}`,
-            collapsed ? "h-9" : "h-8"
+            collapsed ? "h-9!" : "h-8"
           )}
         >
           <TabsTrigger
@@ -156,7 +156,7 @@ function HeaderChannelSwitcher({
   const [switching, setSwitching] = useState(false)
   const profile = useChannelIdentity(channel)
   const displayName = profile?.displayName || channel
-  const showInput = !channel || switching
+  const showInput = switching
 
   function handleOpen(event: React.FormEvent) {
     event.preventDefault()
@@ -183,9 +183,8 @@ function HeaderChannelSwitcher({
           autoFocus={!disabled}
           className="h-9 rounded-full bg-muted"
           onBlur={() => {
-            if (!draft.trim()) {
-              setSwitching(false)
-            }
+            setDraft("")
+            setSwitching(false)
           }}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
@@ -195,6 +194,23 @@ function HeaderChannelSwitcher({
           }}
         />
       </form>
+    )
+  }
+
+  if (!displayName) {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        className="flex h-9 min-w-0 max-w-56 items-center gap-2 rounded-full border border-dashed px-2.5 text-left hover:text-foreground disabled:pointer-events-none"
+        onClick={() => setSwitching(true)}
+        aria-label="Open a channel"
+      >
+        <span className="size-6 shrink-0 rounded-full border border-dashed border-border" />
+        <span className="truncate text-sm font-medium text-muted-foreground">
+          No channel selected
+        </span>
+      </button>
     )
   }
 

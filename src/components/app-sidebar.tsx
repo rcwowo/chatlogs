@@ -48,7 +48,7 @@ export function AppSidebar({
     bookmarks.map((item) => item.channel)
   )
   const isDark = resolvedTheme === "dark"
-  const showInput = !current || switching
+  const showInput = switching
   const displayName = profile?.displayName || current
 
   function handleOpen(event: React.FormEvent) {
@@ -79,9 +79,8 @@ export function AppSidebar({
               autoComplete="off"
               autoFocus
               onBlur={() => {
-                if (!draft.trim()) {
-                  setSwitching(false)
-                }
+                setDraft("")
+                setSwitching(false)
               }}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
@@ -193,18 +192,30 @@ function ChannelSwitcherButton({
   return (
     <button
       type="button"
-      className="flex w-full items-center gap-2.5 rounded-xl border border-dashed px-2.5 py-2 text-left hover:bg-sidebar-accent"
+      className="flex w-full items-center gap-2.5 rounded-xl border border-dashed px-2 py-2 text-left hover:bg-sidebar-accent"
       onClick={onClick}
       aria-label={label}
     >
       {displayName ? (
-        <ChannelAvatar name={displayName} src={logo} />
+        <>
+          <ChannelAvatar name={displayName} src={logo} />
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">
+            {displayName}
+          </span>
+        </>
       ) : (
-        <span className="size-8 shrink-0 rounded-full border border-dashed border-sidebar-border" />
+        <>
+          <span className="size-8 shrink-0 rounded-full border border-dashed border-sidebar-border" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold">
+              No channel selected.
+            </span>
+            <span className="block truncate text-xs text-muted-foreground">
+              Click here to set a channel.
+            </span>
+          </span>
+        </>
       )}
-      <span className="min-w-0 flex-1 truncate text-sm font-medium">
-        {displayName || "Open a channel"}
-      </span>
     </button>
   )
 }
