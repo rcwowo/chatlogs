@@ -4,7 +4,7 @@ import { BookmarkIcon, SquareArrowOutUpRightIcon } from "lucide-react"
 import { ChannelAvatar } from "@/components/channel-avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger, TabsIndicator } from "@/components/ui/tabs"
 import { SidebarTrigger, SIDEBAR_TRANSITION, useSidebar } from "@/components/ui/sidebar"
 import { useChannelIdentity } from "@/hooks/use-channel-identity"
 import { cn } from "@/lib/utils"
@@ -73,32 +73,26 @@ export function ChannelHeader({
             collapsed ? "h-9!" : "h-8"
           )}
         >
-          <TabsTrigger
+          <TabsIndicator
             className={cn(
-              "rounded-full px-3.5",
-              `transition-[background-color] ${SIDEBAR_TRANSITION}`,
-              collapsed && "data-active:bg-background/80"
+              "rounded-full bg-background dark:bg-input/30 dark:border dark:border-input",
+              collapsed && "bg-background/80"
             )}
+          />
+          <TabsTrigger
+            className="rounded-full px-3.5 data-active:bg-transparent dark:data-active:bg-transparent dark:data-active:border-transparent"
             value="logs"
           >
             Logs
           </TabsTrigger>
           <TabsTrigger
-            className={cn(
-              "rounded-full px-3.5",
-              `transition-[background-color] ${SIDEBAR_TRANSITION}`,
-              collapsed && "data-active:bg-background/80"
-            )}
+            className="rounded-full px-3.5 data-active:bg-transparent dark:data-active:bg-transparent dark:data-active:border-transparent"
             value="user"
           >
             User
           </TabsTrigger>
           <TabsTrigger
-            className={cn(
-              "rounded-full px-3.5",
-              `transition-[background-color] ${SIDEBAR_TRANSITION}`,
-              collapsed && "data-active:bg-background/80"
-            )}
+            className="rounded-full px-3.5 data-active:bg-transparent dark:data-active:bg-transparent dark:data-active:border-transparent"
             value="stats"
           >
             Stats
