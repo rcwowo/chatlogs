@@ -50,12 +50,13 @@ export function App() {
     return subset.length > 0 ? subset : enabled
   }, [effectiveDate, enabled, meta])
 
-  const logs = useDayLogs(
+  const dayLogs = useDayLogs(
     channel,
     effectiveDate,
     datedProviders,
-    query.tab === "logs" && meta.status === "ready" && Boolean(effectiveDate)
+    meta.status === "ready" && Boolean(effectiveDate)
   )
+  const logs = dayLogs.state
   const roomId = meta.status === "ready" ? (meta.profile?.id ?? "") : ""
   const catalog = useChatCatalog(
     roomId,
@@ -138,6 +139,8 @@ export function App() {
                   userFilter={query.user}
                   filterQuery={query.q}
                   logs={logs}
+                  onRefreshLogs={dayLogs.refresh}
+                  refreshingLogs={dayLogs.refreshing}
                   catalog={catalog}
                   onUserFilter={(user) => setQuery({ user })}
                   onFilterQuery={(q) => setQuery({ q })}

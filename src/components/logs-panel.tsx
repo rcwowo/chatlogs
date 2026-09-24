@@ -4,6 +4,7 @@ import {
   ArrowUpNarrowWideIcon,
   CalendarDaysIcon,
   FilterIcon,
+  RefreshCwIcon,
   XIcon,
 } from "lucide-react"
 
@@ -44,6 +45,8 @@ export function LogsPanel({
   userFilter,
   filterQuery,
   logs,
+  onRefreshLogs,
+  refreshingLogs,
   catalog,
   onUserFilter,
   onFilterQuery,
@@ -55,6 +58,8 @@ export function LogsPanel({
   userFilter: string
   filterQuery: string
   logs: DayLogsState
+  onRefreshLogs: () => void
+  refreshingLogs: boolean
   catalog: ChatCatalog
   onUserFilter: (user: string) => void
   onFilterQuery: (q: string) => void
@@ -153,6 +158,18 @@ export function LogsPanel({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card">
       <div className="flex items-center gap-2 px-4 py-2.5">
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="shrink-0 rounded-full bg-background text-muted-foreground hover:text-foreground"
+          aria-label="Refresh messages"
+          onClick={onRefreshLogs}
+        >
+          <RefreshCwIcon
+            className={cn(refreshingLogs && "animate-spin")}
+          />
+        </Button>
         <p className="min-w-0 text-sm text-muted-foreground">
           {logs.status === "ready" ? (
             <>
