@@ -4,8 +4,17 @@ import { BookmarkIcon, SquareArrowOutUpRightIcon } from "lucide-react"
 import { ChannelAvatar } from "@/components/channel-avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Tabs, TabsList, TabsTrigger, TabsIndicator } from "@/components/ui/tabs"
-import { SidebarTrigger, SIDEBAR_TRANSITION, useSidebar } from "@/components/ui/sidebar"
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsIndicator,
+} from "@/components/ui/tabs"
+import {
+  SidebarTrigger,
+  SIDEBAR_TRANSITION,
+  useSidebar,
+} from "@/components/ui/sidebar"
 import { useChannelIdentity } from "@/hooks/use-channel-identity"
 import { cn } from "@/lib/utils"
 import { twitchChannelUrl } from "@/lib/chat/types"
@@ -75,27 +84,21 @@ export function ChannelHeader({
         >
           <TabsIndicator
             className={cn(
-              "rounded-full bg-background dark:bg-input/30 dark:border dark:border-input",
+              "rounded-full bg-background dark:border dark:border-input dark:bg-input/30",
               collapsed && "bg-background/80"
             )}
           />
           <TabsTrigger
-            className="rounded-full px-3.5 data-active:bg-transparent dark:data-active:bg-transparent dark:data-active:border-transparent"
+            className="rounded-full px-3.5 data-active:bg-transparent dark:data-active:border-transparent dark:data-active:bg-transparent"
             value="logs"
           >
             Logs
           </TabsTrigger>
           <TabsTrigger
-            className="rounded-full px-3.5 data-active:bg-transparent dark:data-active:bg-transparent dark:data-active:border-transparent"
+            className="rounded-full px-3.5 data-active:bg-transparent dark:data-active:border-transparent dark:data-active:bg-transparent"
             value="user"
           >
-            User
-          </TabsTrigger>
-          <TabsTrigger
-            className="rounded-full px-3.5 data-active:bg-transparent dark:data-active:bg-transparent dark:data-active:border-transparent"
-            value="stats"
-          >
-            Stats
+            Profile
           </TabsTrigger>
         </TabsList>
       </Tabs>
@@ -167,7 +170,7 @@ function HeaderChannelSwitcher({
     return (
       <form
         onSubmit={handleOpen}
-        className={cn("min-w-0 max-w-56", disabled && "pointer-events-none")}
+        className={cn("max-w-56 min-w-0", disabled && "pointer-events-none")}
       >
         <Input
           value={draft}
@@ -196,7 +199,7 @@ function HeaderChannelSwitcher({
       <button
         type="button"
         disabled={disabled}
-        className="flex h-9 min-w-0 max-w-56 items-center gap-2 rounded-full border border-dashed px-2.5 text-left hover:text-foreground disabled:pointer-events-none"
+        className="flex h-9 max-w-56 min-w-0 items-center gap-2 rounded-full border border-dashed px-2.5 text-left hover:text-foreground disabled:pointer-events-none"
         onClick={() => setSwitching(true)}
         aria-label="Open a channel"
       >
@@ -212,7 +215,7 @@ function HeaderChannelSwitcher({
     <button
       type="button"
       disabled={disabled}
-      className="flex h-9 min-w-0 max-w-56 items-center gap-2 rounded-full bg-muted px-2.5 text-left hover:text-foreground disabled:pointer-events-none"
+      className="flex h-9 max-w-56 min-w-0 items-center gap-2 rounded-full bg-muted px-2.5 text-left hover:text-foreground disabled:pointer-events-none"
       onClick={() => setSwitching(true)}
       aria-label="Switch channel"
     >

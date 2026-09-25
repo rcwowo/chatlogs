@@ -4,10 +4,10 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { ChannelHeader } from "@/components/channel-header"
 import { LogsPanel } from "@/components/logs-panel"
 import { ProviderSettings } from "@/components/provider-settings"
-import { StatsPanel } from "@/components/stats-panel"
 import { UserPanel } from "@/components/user-panel"
 import { UserCardProvider } from "@/hooks/use-user-card"
 import { useChatCatalog } from "@/hooks/use-chat-catalog"
+import { useTwitchCosmetics } from "@/hooks/use-twitch-cosmetics"
 import {
   Sheet,
   SheetContent,
@@ -30,7 +30,12 @@ import { parseTarget } from "@/lib/twitch"
 export function App() {
   const { query, setQuery, replaceQuery } = useLogsQuery()
   const { providers, enabled, setEnabled, add, remove } = useProviders()
-  const { bookmarks, add: addBookmark, remove: removeBookmark, has } = useBookmarks()
+  const {
+    bookmarks,
+    add: addBookmark,
+    remove: removeBookmark,
+    has,
+  } = useBookmarks()
   const [providersOpen, setProvidersOpen] = useState(false)
 
   const channel = parseTarget(query.channel)?.value ?? ""
@@ -62,11 +67,12 @@ export function App() {
     roomId,
     query.tab === "logs" && meta.status === "ready"
   )
-  const stats = useChannelStats(
+  const { state: stats, refresh: refreshStats } = useChannelStats(
     channel,
     enabled,
-    query.tab === "stats" && meta.status === "ready"
+    meta.status === "ready"
   )
+  const cosmetics = useTwitchCosmetics(channel, meta.status === "ready")
 
   function openChannel(next: string) {
     const target = parseTarget(next)
@@ -139,7 +145,10 @@ export function App() {
                   userFilter={query.user}
                   filterQuery={query.q}
                   logs={logs}
-                  onRefreshLogs={dayLogs.refresh}
+                  onRefreshLogs={() => {
+                    dayLogs.refresh()
+                    refreshStats()
+                  }}
                   refreshingLogs={dayLogs.refreshing}
                   catalog={catalog}
                   onUserFilter={(user) => setQuery({ user })}
@@ -150,16 +159,18 @@ export function App() {
             ) : null}
 
             {meta.status === "ready" && query.tab === "user" ? (
-              <UserPanel login={channel} profile={meta.profile} />
-            ) : null}
-
-            {meta.status === "ready" && query.tab === "stats" ? (
-              <StatsPanel
-                stats={stats.status === "ready" ? stats.stats : null}
-                loading={stats.status === "loading"}
+              <UserPanel
+                login={channel}
+                profile={meta.profile}
                 dates={meta.dates}
+                stats={stats.status === "ready" ? stats.stats : null}
+                statsLoading={stats.status === "loading"}
                 providers={enabled}
                 statuses={stats.status === "ready" ? stats.statuses : []}
+                cosmetics={
+                  cosmetics.status === "ready" ? cosmetics.cosmetics : null
+                }
+                cosmeticsLoading={cosmetics.status === "loading"}
                 onChatterClick={(login) =>
                   setQuery({ tab: "logs", user: login })
                 }

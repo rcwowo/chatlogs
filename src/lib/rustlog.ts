@@ -309,11 +309,13 @@ export async function fetchChannelStats(
   }
 
   const path = `${rustlogPath(channel, "channel")}/stats`
+  const isEmptyStats = (data: ChannelStats) =>
+    data.messageCount <= 0 && (data.topChatters ?? []).length === 0
   const results = await Promise.all(
     providers.map(async (provider) => {
       const url = buildUrl(provider.url, path)
       const result = await fetchJson<ChannelStats>(url, signal)
-      if (result.ok) {
+      if (result.ok && !isEmptyStats(result.data)) {
         return {
           providerId: provider.id,
           status: "ok" as const,
@@ -322,8 +324,9 @@ export async function fetchChannelStats(
       }
       return {
         providerId: provider.id,
-        status: result.missing ? ("missing" as const) : ("error" as const),
-        error: result.error,
+        status: (result.ok || result.missing ? "missing" : "error") as
+          "missing" | "error",
+        error: result.ok ? "No stats" : result.error,
         stats: null as ChannelStats | null,
       }
     })

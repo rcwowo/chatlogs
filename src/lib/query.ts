@@ -1,4 +1,4 @@
-export type AppTab = "logs" | "user" | "stats"
+export type AppTab = "logs" | "user"
 
 export type LogsQuery = {
   channel: string
@@ -9,7 +9,7 @@ export type LogsQuery = {
 }
 
 function parseTab(value: string | null): AppTab {
-  if (value === "user" || value === "stats") {
+  if (value === "user") {
     return value
   }
   return "logs"

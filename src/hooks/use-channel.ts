@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import { rememberChannelIdentity } from "@/lib/channel-identity"
 import { fromDateKey } from "@/lib/dates"
@@ -83,7 +83,9 @@ export function useChannel(channel: string, providers: Provider[]) {
           return
         }
 
-        const dates = discovery.dates.filter((dateKey) => fromDateKey(dateKey)?.day)
+        const dates = discovery.dates.filter(
+          (dateKey) => fromDateKey(dateKey)?.day
+        )
 
         if (dates.length === 0) {
           const hadError = discovery.statuses.some(
@@ -154,9 +156,45 @@ export function useChannelStats(
   const [state, setState] = useState<ChannelStatsState & { key?: string }>({
     status: "idle",
   })
+  const cache = useRef(
+    new Map<
+      string,
+      {
+        stats: (ChannelStats & { providerId: string }) | null
+        statuses: ProviderStatus[]
+      }
+    >()
+  )
+  const [refreshTick, setRefreshTick] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const refresh = useCallback(() => {
+    if (!enabled || !channel) {
+      return
+    }
+    cache.current.delete(key)
+    setRefreshing(true)
+    setRefreshTick((tick) => tick + 1)
+  }, [channel, enabled, key])
 
   useEffect(() => {
     if (!enabled || !login || providers.length === 0) {
+      return
+    }
+
+    const cached = cache.current.get(key)
+    if (cached) {
+      setRefreshing(false)
+      setState((current) =>
+        current.key === key
+          ? current
+          : {
+              key,
+              status: "ready",
+              stats: cached.stats,
+              statuses: cached.statuses,
+            }
+      )
       return
     }
 
@@ -168,12 +206,24 @@ export function useChannelStats(
       if (cancelled) {
         return
       }
-      setState({ key, status: "loading" })
+      // When refreshing already-shown stats, keep them visible while refetching.
+      setState((current) =>
+        current.key === key ? current : { key, status: "loading" }
+      )
       try {
-        const result = await fetchChannelStats(providers, login, controller.signal)
+        const result = await fetchChannelStats(
+          providers,
+          login,
+          controller.signal
+        )
         if (cancelled) {
           return
         }
+        cache.current.set(key, {
+          stats: result.stats,
+          statuses: result.statuses,
+        })
+        setRefreshing(false)
         setState({
           key,
           status: "ready",
@@ -184,6 +234,7 @@ export function useChannelStats(
         if (cancelled || controller.signal.aborted) {
           return
         }
+        setRefreshing(false)
         setState({
           key,
           status: "error",
@@ -199,15 +250,16 @@ export function useChannelStats(
       cancelled = true
       controller.abort()
     }
-  }, [enabled, key, login, providers])
+  }, [enabled, key, login, providers, refreshTick])
 
   if (!enabled || !login) {
-    return STATS_IDLE
+    return { state: STATS_IDLE, refreshing: false, refresh }
   }
 
-  if (state.status === "idle" || state.key !== key) {
-    return STATS_LOADING
+  return {
+    state:
+      state.status === "idle" || state.key !== key ? STATS_LOADING : state,
+    refreshing,
+    refresh,
   }
-
-  return state
 }
