@@ -1,9 +1,12 @@
 import { memo, useMemo, useRef } from "react"
+import { ArrowUpRightIcon } from "lucide-react"
 
 import { ChatBadgeList } from "@/components/chat/badge"
 import { ChatMessageBody } from "@/components/chat/message-body"
 import { useUserCardOptional } from "@/hooks/use-user-card"
 import { resolveMessageBadges, type ChatBadgeCatalog } from "@/lib/chat/badges"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import {
   hydrateMessageEmotes,
   type ThirdPartyEmoteCatalog,
@@ -20,10 +23,14 @@ export const LogMessage = memo(function LogMessage({
   message,
   badges,
   emotes,
+  highlighted = false,
+  onJumpToContext,
 }: {
   message: MergedMessage
   badges: ChatBadgeCatalog
   emotes: ThirdPartyEmoteCatalog
+  highlighted?: boolean
+  onJumpToContext?: () => void
 }) {
   const parsed = useMemo(() => parseLogChat(message), [message])
   const hydrated = useMemo(
@@ -104,7 +111,34 @@ export const LogMessage = memo(function LogMessage({
   )
 
   return (
-    <div className="chat-message group relative px-3 leading-5">
+    <div
+      className={cn(
+        "chat-message group relative leading-5",
+        highlighted
+          ? "bg-purple-500/15 transition-colors dark:bg-purple-400/15"
+          : undefined
+      )}
+    >
+      {onJumpToContext ? (
+        <div className="pointer-events-none absolute top-0 right-2 z-10 -translate-y-1/2 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+          <div className="pointer-events-auto flex items-center rounded-md bg-background/80 p-0.5 shadow-sm ring-1 ring-border/40 backdrop-blur-sm">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="cursor-pointer text-muted-foreground hover:text-foreground"
+              aria-label="Jump to this message outside of the filter"
+              title="Jump to context in the unfiltered log"
+              onClick={(event) => {
+                event.stopPropagation()
+                onJumpToContext()
+              }}
+            >
+              <ArrowUpRightIcon className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+      ) : null}
       {parsed.reply ? (
         <div className="mb-0.5 text-xs text-muted-foreground">
           Replying to {parsed.reply.displayName}

@@ -166,9 +166,7 @@ export function LogsPanel({
           aria-label="Refresh messages"
           onClick={onRefreshLogs}
         >
-          <RefreshCwIcon
-            className={cn(refreshingLogs && "animate-spin")}
-          />
+          <RefreshCwIcon className={cn(refreshingLogs && "animate-spin")} />
         </Button>
         <p className="min-w-0 text-sm text-muted-foreground">
           {logs.status === "ready" ? (
@@ -396,7 +394,17 @@ export function LogsPanel({
         {logs.status === "ready" ? (
           <LogViewer
             key={`${channelLogin}|${date}`}
-            messages={filtered}
+            messages={queryActive ? filtered : messages}
+            contextMessages={messages}
+            isFiltered={visibleCount !== logs.messages.length}
+            onClearFilters={() => {
+              if (filterQuery.trim()) {
+                onFilterQuery("")
+              }
+              if (userFilter) {
+                onUserFilter("")
+              }
+            }}
             total={logs.messages.length}
             badges={catalog.badges}
             emotes={catalog.emotes}

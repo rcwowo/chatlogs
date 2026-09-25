@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { ArrowDownToLineIcon, ArrowUpToLineIcon } from "lucide-react"
 
@@ -11,12 +18,18 @@ import type { MergedMessage } from "@/lib/rustlog"
 
 export function LogViewer({
   messages,
+  contextMessages,
+  isFiltered = false,
+  onClearFilters,
   total,
   badges,
   emotes,
   newestAtBottom = true,
 }: {
   messages: MergedMessage[]
+  contextMessages?: MergedMessage[]
+  isFiltered?: boolean
+  onClearFilters?: () => void
   total: number
   badges: ChatBadgeCatalog
   emotes: ThirdPartyEmoteCatalog
@@ -24,6 +37,24 @@ export function LogViewer({
 }) {
   const parentRef = useRef<HTMLDivElement>(null)
   const [showJumpToNewest, setShowJumpToNewest] = useState(false)
+  // When filters are active, remember where the unfiltered view was so it can
+  // be restored once the filters are cleared. Anchored by message key so it
+  // stays valid regardless of which list is currently rendered.
+  const anchorRef = useRef<{ key: string; offset: number } | null>(null)
+  const [pendingJumpKey, setPendingJumpKey] = useState<string | null>(null)
+  const [highlightKey, setHighlightKey] = useState<string | null>(null)
+  const wasFilteredRef = useRef(isFiltered)
+
+  const fullIndex = useMemo(() => {
+    if (!contextMessages) {
+      return null
+    }
+    const map = new Map<string, number>()
+    contextMessages.forEach((message, index) => {
+      map.set(message.key, index)
+    })
+    return map
+  }, [contextMessages])
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
@@ -42,6 +73,21 @@ export function LogViewer({
     if (!el) {
       return
     }
+    if (!isFiltered) {
+      // Snapshot the current view onto the unfiltered list using the message
+      // key, so the anchor survives switching to and from filtered views.
+      const items = virtualizer.getVirtualItems()
+      const top = items[0]
+      if (top) {
+        const sourceIndex = newestAtBottom
+          ? top.index
+          : messages.length - 1 - top.index
+        const key = messages[sourceIndex]?.key
+        if (key) {
+          anchorRef.current = { key, offset: el.scrollTop - top.start }
+        }
+      }
+    }
     const threshold = 300
     if (newestAtBottom) {
       const distanceFromBottom =
@@ -50,7 +96,7 @@ export function LogViewer({
     } else {
       setShowJumpToNewest(el.scrollTop > threshold)
     }
-  }, [newestAtBottom])
+  }, [newestAtBottom, isFiltered, messages, virtualizer])
 
   useEffect(() => {
     const el = parentRef.current
@@ -90,6 +136,68 @@ export function LogViewer({
     scrollToNewest()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newestAtBottom, total])
+
+  // Returning to the unfiltered view: jump pending context target if one was
+  // requested from a filtered view, otherwise restore the previous scroll
+  // position, falling back to the newest end per the view direction.
+  useEffect(() => {
+    if (wasFilteredRef.current && !isFiltered && messages.length > 0) {
+      const jumpKey = pendingJumpKey
+      const anchor = anchorRef.current
+      setPendingJumpKey(null)
+      if (jumpKey) {
+        const sourceIndex = fullIndex?.get(jumpKey)
+        if (sourceIndex !== undefined) {
+          virtualizer.scrollToIndex(
+            newestAtBottom ? sourceIndex : messages.length - 1 - sourceIndex,
+            { align: "start" }
+          )
+          setHighlightKey(jumpKey)
+          const timer = setTimeout(() => setHighlightKey(null), 1500)
+          anchorRef.current = null
+          return () => clearTimeout(timer)
+        }
+      } else if (anchor) {
+        const sourceIndex = fullIndex?.get(anchor.key)
+        if (
+          sourceIndex !== undefined &&
+          anchor.key !== messages[newestAtBottom ? 0 : messages.length - 1]?.key
+        ) {
+          const target = newestAtBottom
+            ? sourceIndex
+            : messages.length - 1 - sourceIndex
+          virtualizer.scrollToIndex(target, { align: "start" })
+          requestAnimationFrame(() => {
+            const node = parentRef.current
+            if (node) {
+              node.scrollTop -= anchor.offset
+            }
+          })
+        }
+        // No anchor: the list already sits wherever it was, and initial loads
+        // are handled by the newest-end scroll above.
+      }
+    }
+    wasFilteredRef.current = isFiltered
+  }, [
+    isFiltered,
+    messages,
+    fullIndex,
+    newestAtBottom,
+    virtualizer,
+    pendingJumpKey,
+  ])
+
+  function jumpToContext(key: string) {
+    if (!onClearFilters) {
+      return
+    }
+    // Reset the anchor so clearing filters uses the context jump, not the
+    // stale pre-filter scroll position.
+    anchorRef.current = null
+    setPendingJumpKey(key)
+    onClearFilters()
+  }
 
   if (total === 0) {
     return (
@@ -141,6 +249,12 @@ export function LogViewer({
                     message={message}
                     badges={badges}
                     emotes={emotes}
+                    highlighted={message.key === highlightKey}
+                    onJumpToContext={
+                      isFiltered && onClearFilters
+                        ? () => jumpToContext(message.key)
+                        : undefined
+                    }
                   />
                 </div>
               )
@@ -163,11 +277,7 @@ export function LogViewer({
             title={newestAtBottom ? "Scroll to bottom" : "Scroll to top"}
             onClick={scrollToNewest}
           >
-            {newestAtBottom ? (
-              <ArrowDownToLineIcon />
-            ) : (
-              <ArrowUpToLineIcon />
-            )}
+            {newestAtBottom ? <ArrowDownToLineIcon /> : <ArrowUpToLineIcon />}
           </Button>
         ) : null}
       </div>
