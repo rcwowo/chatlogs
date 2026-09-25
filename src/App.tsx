@@ -34,6 +34,7 @@ export function App() {
     bookmarks,
     add: addBookmark,
     remove: removeBookmark,
+    move: moveBookmark,
     has,
   } = useBookmarks()
   const [providersOpen, setProvidersOpen] = useState(false)
@@ -107,6 +108,7 @@ export function App() {
           bookmarks={bookmarks}
           onOpenChannel={openChannel}
           onRemoveBookmark={removeBookmark}
+          onMoveBookmark={moveBookmark}
           onOpenProviders={() => setProvidersOpen(true)}
         />
         <SidebarInset className="h-svh overflow-hidden">

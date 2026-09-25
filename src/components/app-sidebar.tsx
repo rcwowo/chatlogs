@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { MoonIcon, Settings2Icon, SunIcon, XIcon } from "lucide-react"
 
 import { useTheme } from "@/components/theme-provider"
@@ -26,21 +26,33 @@ import type { Bookmark } from "@/lib/bookmarks"
 import { parseTarget } from "@/lib/twitch"
 import { cn } from "@/lib/utils"
 
+type BookmarkDropTarget = {
+  index: number
+  top: number
+  left: number
+  width: number
+}
+
 export function AppSidebar({
   channel,
   bookmarks,
   onOpenChannel,
   onRemoveBookmark,
+  onMoveBookmark,
   onOpenProviders,
 }: {
   channel: string
   bookmarks: Bookmark[]
   onOpenChannel: (channel: string) => void
   onRemoveBookmark: (channel: string) => void
+  onMoveBookmark: (channel: string, toIndex: number) => void
   onOpenProviders: () => void
 }) {
   const [draft, setDraft] = useState("")
   const [switching, setSwitching] = useState(false)
+  const [dragging, setDragging] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<BookmarkDropTarget | null>(null)
+  const listRef = useRef<HTMLUListElement>(null)
   const current = parseTarget(channel)?.value ?? ""
   const { resolvedTheme, setTheme } = useTheme()
   const profile = useChannelIdentity(current)
@@ -64,6 +76,82 @@ export function AppSidebar({
 
   function startSwitching() {
     setSwitching(true)
+  }
+
+  function computeDropTarget(
+    event: React.DragEvent
+  ): BookmarkDropTarget | null {
+    const list = listRef.current
+    if (!list || !dragging) {
+      return null
+    }
+    const from = bookmarks.findIndex((item) => item.channel === dragging)
+    if (from === -1) {
+      return null
+    }
+    const targets = Array.from(
+      list.querySelectorAll<HTMLLIElement>("li[data-bookmark]")
+    )
+    if (targets.length === 0) {
+      return null
+    }
+    let position = targets.length
+    for (const [index, target] of targets.entries()) {
+      const rect = target.getBoundingClientRect()
+      if (event.clientY < rect.top + rect.height / 2) {
+        position = index
+        break
+      }
+    }
+    if (position === from || position === from + 1) {
+      return null
+    }
+    const anchor =
+      targets[position < targets.length ? position : targets.length - 1]
+    const rect = anchor.getBoundingClientRect()
+    const listRect = list.getBoundingClientRect()
+    return {
+      index: position,
+      top: (position < targets.length ? rect.top : rect.bottom) - listRect.top,
+      left: rect.left - listRect.left,
+      width: rect.width,
+    }
+  }
+
+  function handleListDragOver(event: React.DragEvent) {
+    event.preventDefault()
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "move"
+    }
+    setDropTarget(computeDropTarget(event))
+  }
+
+  function handleListDrop(event: React.DragEvent) {
+    event.preventDefault()
+    const channel = event.dataTransfer?.getData("text/plain") || dragging
+    if (channel && dropTarget) {
+      onMoveBookmark(channel, dropTarget.index)
+    }
+    setDropTarget(null)
+  }
+
+  function handleListDragLeave(event: React.DragEvent) {
+    if (!listRef.current?.contains(event.relatedTarget as Node | null)) {
+      setDropTarget(null)
+    }
+  }
+
+  function handleBookmarkDragStart(event: React.DragEvent, value: string) {
+    setDragging(value)
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move"
+      event.dataTransfer.setData("text/plain", value)
+    }
+  }
+
+  function handleBookmarkDragEnd() {
+    setDragging(null)
+    setDropTarget(null)
   }
 
   return (
@@ -111,18 +199,34 @@ export function AppSidebar({
                   ? "flex items-center justify-center px-4 py-6"
                   : "overflow-auto p-1.5"
               )}
+              onDragOver={handleListDragOver}
+              onDrop={handleListDrop}
+              onDragLeave={handleListDragLeave}
             >
               {bookmarks.length === 0 ? (
                 <p className="text-center text-sm text-muted-foreground">
                   Bookmark a channel to quickly access it in the future.
                 </p>
               ) : (
-                <SidebarMenu>
+                <SidebarMenu ref={listRef} className="relative">
                   {bookmarks.map((bookmark) => {
                     const user = bookmarkUsers[bookmark.channel]
                     const name = user?.displayName || bookmark.channel
                     return (
-                      <SidebarMenuItem key={bookmark.channel}>
+                      <SidebarMenuItem
+                        key={bookmark.channel}
+                        data-bookmark
+                        draggable
+                        onDragStart={(event) =>
+                          handleBookmarkDragStart(event, bookmark.channel)
+                        }
+                        onDragEnd={handleBookmarkDragEnd}
+                        className={
+                          dragging === bookmark.channel
+                            ? "opacity-50"
+                            : undefined
+                        }
+                      >
                         <SidebarMenuButton
                           isActive={current === bookmark.channel}
                           onClick={() => onOpenChannel(bookmark.channel)}
@@ -146,6 +250,17 @@ export function AppSidebar({
                       </SidebarMenuItem>
                     )
                   })}
+                  {dropTarget ? (
+                    <li
+                      aria-hidden
+                      className="pointer-events-none absolute z-10 h-0.5 -translate-y-1/2 rounded-full bg-primary"
+                      style={{
+                        top: dropTarget.top,
+                        left: dropTarget.left,
+                        width: dropTarget.width,
+                      }}
+                    />
+                  ) : null}
                 </SidebarMenu>
               )}
             </div>

@@ -42,6 +42,24 @@ export function addBookmark(channel: string) {
   return next
 }
 
+export function moveBookmark(
+  channel: string,
+  toIndex: number
+): Bookmark[] | null {
+  const bookmarks = readBookmarks()
+  const fromIndex = bookmarks.findIndex((item) => item.channel === channel)
+  if (fromIndex === -1) {
+    return null
+  }
+
+  const next = [...bookmarks]
+  const [moved] = next.splice(fromIndex, 1)
+  const clamped = Math.min(Math.max(toIndex, 0), next.length)
+  next.splice(clamped, 0, moved)
+  writeBookmarks(next)
+  return next
+}
+
 export function removeBookmark(channel: string) {
   const target = parseTarget(channel)
   if (!target) {

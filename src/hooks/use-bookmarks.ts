@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react"
 import {
   addBookmark,
   listBookmarks,
+  moveBookmark,
   removeBookmark,
   type Bookmark,
 } from "@/lib/bookmarks"
@@ -40,6 +41,14 @@ export function useBookmarks() {
     return next
   }, [])
 
+  const move = useCallback((channel: string, toIndex: number) => {
+    const next = moveBookmark(channel, toIndex)
+    if (next) {
+      setBookmarks(next)
+    }
+    return next
+  }, [])
+
   const has = useCallback(
     (channel: string) => {
       const target = parseTarget(channel)
@@ -51,5 +60,5 @@ export function useBookmarks() {
     [bookmarks]
   )
 
-  return { bookmarks, add, remove, has }
+  return { bookmarks, add, remove, move, has }
 }
