@@ -76,6 +76,7 @@ export function AppSidebar({
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               placeholder={current ? "Switch channel" : "Open a channel"}
+              className="rounded-xl bg-muted dark:bg-muted/50 focus-visible:ring-0"
               autoComplete="off"
               autoFocus
               onBlur={() => {

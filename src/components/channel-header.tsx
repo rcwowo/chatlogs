@@ -178,7 +178,7 @@ function HeaderChannelSwitcher({
           placeholder={channel ? "Switch channel" : "Open a channel"}
           autoComplete="off"
           autoFocus={!disabled}
-          className="h-9 rounded-full bg-muted"
+          className="h-9 rounded-full bg-muted dark:bg-muted focus-visible:ring-0"
           onBlur={() => {
             setDraft("")
             setSwitching(false)
@@ -199,7 +199,7 @@ function HeaderChannelSwitcher({
       <button
         type="button"
         disabled={disabled}
-        className="flex h-9 max-w-56 min-w-0 items-center gap-2 rounded-full border border-dashed px-2.5 text-left hover:text-foreground disabled:pointer-events-none"
+        className="flex h-9 max-w-56 min-w-0 items-center gap-2 rounded-full border border-border px-2.5 text-left hover:text-foreground disabled:pointer-events-none"
         onClick={() => setSwitching(true)}
         aria-label="Open a channel"
       >
