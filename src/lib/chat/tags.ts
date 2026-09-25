@@ -1,4 +1,5 @@
 import { createCodePointIndex } from "@/lib/chat/positions"
+import type { MessageTimestampFormat } from "@/lib/settings/config"
 import {
   EMPTY_CHAT_FLAGS,
   PRIVMSG,
@@ -148,19 +149,39 @@ function parseLogChatUncached(message: MergedMessage): ParsedLogChat {
   }
 }
 
-export function formatLogTimestamp(timestamp: string) {
-  if (!timestamp) {
+export function formatLogTimestamp(
+  timestamp: string,
+  format: MessageTimestampFormat = "24-hour"
+) {
+  if (!timestamp || format === "none") {
     return ""
   }
   const date = new Date(timestamp)
   if (Number.isNaN(date.getTime())) {
     return timestamp
   }
-  return timeFormatter.format(date)
+
+  if (format === "24-hour") {
+    return time24HourFormatter.format(date)
+  }
+  if (format === "12-hour-meridiem") {
+    return time12HourFormatter.format(date)
+  }
+  return time12HourFormatter
+    .formatToParts(date)
+    .flatMap((part) => (part.type !== "dayPeriod" ? [part.value] : []))
+    .join("")
+    .trim()
 }
 
-const timeFormatter = new Intl.DateTimeFormat(undefined, {
+const time24HourFormatter = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,
+})
+
+const time12HourFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
 })

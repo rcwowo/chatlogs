@@ -23,7 +23,11 @@ const emptyCatalog: ChatCatalog = {
   emotes: createEmptyEmoteCatalog(),
 }
 
-export function useChatCatalog(roomId: string, enabled = true) {
+export function useChatCatalog(
+  roomId: string,
+  enabled = true,
+  refreshToken = ""
+) {
   const id = roomId.trim()
   const [catalog, setCatalog] = useState<{ key: string; value: ChatCatalog }>({
     key: "",
@@ -65,7 +69,7 @@ export function useChatCatalog(roomId: string, enabled = true) {
       cancelled = true
       controller.abort()
     }
-  }, [enabled, id])
+  }, [enabled, id, refreshToken])
 
   if (!enabled || catalog.key !== id) {
     return emptyCatalog

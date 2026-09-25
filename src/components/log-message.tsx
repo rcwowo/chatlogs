@@ -12,6 +12,7 @@ import {
   type ThirdPartyEmoteCatalog,
 } from "@/lib/chat/emotes"
 import { formatLogTimestamp, parseLogChat } from "@/lib/chat/tags"
+import { useSettingsSelector } from "@/hooks/use-settings"
 import type { UserCardTarget } from "@/lib/chat/types"
 import {
   defaultUsernameColor,
@@ -23,12 +24,14 @@ export const LogMessage = memo(function LogMessage({
   message,
   badges,
   emotes,
+  striped = false,
   highlighted = false,
   onJumpToContext,
 }: {
   message: MergedMessage
   badges: ChatBadgeCatalog
   emotes: ThirdPartyEmoteCatalog
+  striped?: boolean
   highlighted?: boolean
   onJumpToContext?: () => void
 }) {
@@ -43,7 +46,10 @@ export const LogMessage = memo(function LogMessage({
   )
   const userCard = useUserCardOptional()
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const timestamp = formatLogTimestamp(message.timestamp)
+  const timestampFormat = useSettingsSelector(
+    (settings) => settings.appearance.messageTimestampFormat
+  )
+  const timestamp = formatLogTimestamp(message.timestamp, timestampFormat)
   const username = message.displayName || message.username
   const color = getReadableUsernameColor(
     parsed.color || defaultUsernameColor(message.username || username)
@@ -112,6 +118,7 @@ export const LogMessage = memo(function LogMessage({
 
   return (
     <div
+      data-striped={striped ? "true" : undefined}
       className={cn(
         "chat-message group relative leading-5",
         highlighted

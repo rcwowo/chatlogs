@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import type { Provider } from "@/lib/providers"
-import {
-  fetchChannelLogs,
-  type MergedMessage,
-} from "@/lib/rustlog"
+import { fetchChannelLogs, type MergedMessage } from "@/lib/rustlog"
 
 export type DayLogsState =
   | { status: "idle" }
@@ -47,7 +44,9 @@ export function useDayLogs(
     if (cached) {
       setRefreshing(false)
       setState((current) =>
-        current.key === key ? current : { key, status: "ready", messages: cached }
+        current.key === key
+          ? current
+          : { key, status: "ready", messages: cached }
       )
       return
     }
@@ -117,8 +116,7 @@ export function useDayLogs(
   }
 
   return {
-    state:
-      state.status === "idle" || state.key !== key ? LOADING : state,
+    state: state.status === "idle" || state.key !== key ? LOADING : state,
     refreshing,
     refresh,
   }

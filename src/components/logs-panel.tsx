@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import type { ChatCatalog } from "@/hooks/use-chat-catalog"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
 import type { DayLogsState } from "@/hooks/use-day-logs"
+import { useSettings } from "@/hooks/use-settings"
 import { formatDateKey } from "@/lib/dates"
 import { copyText } from "@/lib/clipboard"
 import type { Provider } from "@/lib/providers"
@@ -40,9 +41,6 @@ import {
   replaceSearchToken,
   searchLogMessages,
 } from "@/lib/chat/search"
-import { readJson, writeJson } from "@/lib/storage"
-
-const ORDER_STORAGE_KEY = "chatlogs.newestAtBottom"
 
 export function LogsPanel({
   channelLogin,
@@ -83,20 +81,16 @@ export function LogsPanel({
     batches: RawLogBatch[]
     message?: string
   }>({ key: "", status: "loading", batches: [] })
-  const [newestAtBottom, setNewestAtBottom] = useState(() => {
-    const stored = readJson<unknown>(ORDER_STORAGE_KEY, true)
-    return typeof stored === "boolean" ? stored : true
-  })
+  const { settings, updateSettings } = useSettings()
+  const newestAtBottom = settings.logs.newestAtBottom
   const [highlightedSuggestion, setHighlightedSuggestion] = useState(0)
 
-  useEffect(() => {
-    writeJson(ORDER_STORAGE_KEY, newestAtBottom)
-  }, [newestAtBottom])
-
   function toggleDirection() {
-    const next = !newestAtBottom
-    writeJson(ORDER_STORAGE_KEY, next)
-    setNewestAtBottom(next)
+    updateSettings((current) => ({
+      ...current,
+      updatedAt: new Date().toISOString(),
+      logs: { ...current.logs, newestAtBottom: !current.logs.newestAtBottom },
+    }))
   }
 
   const messages = logs.status === "ready" ? logs.messages : []

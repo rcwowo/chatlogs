@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { MoonIcon, Settings2Icon, SunIcon, XIcon } from "lucide-react"
+import { CogIcon, MoonIcon, SunIcon, XIcon } from "lucide-react"
 
 import { useTheme } from "@/components/theme-provider"
 import { ChannelAvatar } from "@/components/channel-avatar"
@@ -39,14 +39,14 @@ export function AppSidebar({
   onOpenChannel,
   onRemoveBookmark,
   onMoveBookmark,
-  onOpenProviders,
+  onOpenSettings,
 }: {
   channel: string
   bookmarks: Bookmark[]
   onOpenChannel: (channel: string) => void
   onRemoveBookmark: (channel: string) => void
   onMoveBookmark: (channel: string, toIndex: number) => void
-  onOpenProviders: () => void
+  onOpenSettings: () => void
 }) {
   const [draft, setDraft] = useState("")
   const [switching, setSwitching] = useState(false)
@@ -164,7 +164,7 @@ export function AppSidebar({
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               placeholder={current ? "Switch channel" : "Open a channel"}
-              className="rounded-xl bg-muted dark:bg-muted/50 focus-visible:ring-0"
+              className="rounded-xl bg-muted focus-visible:ring-0 dark:bg-muted/50"
               autoComplete="off"
               autoFocus
               onBlur={() => {
@@ -284,10 +284,11 @@ export function AppSidebar({
           size="icon"
           variant="ghost"
           className="rounded-full bg-muted text-muted-foreground hover:text-foreground"
-          onClick={onOpenProviders}
-          aria-label="Providers"
+          onClick={() => onOpenSettings()}
+          aria-label="Settings"
+          title="Settings"
         >
-          <Settings2Icon />
+          <CogIcon />
         </Button>
       </SidebarFooter>
     </Sidebar>

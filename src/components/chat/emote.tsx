@@ -1,5 +1,9 @@
 import { ChatHoverTooltipTarget } from "@/components/chat/hover-tooltip"
-import { CHAT_BASE_EMOTE_SIZE_PX, twitchEmoteCdnUrl, type ChatEmote } from "@/lib/chat/types"
+import {
+  CHAT_BASE_EMOTE_SIZE_PX,
+  twitchEmoteCdnUrl,
+  type ChatEmote,
+} from "@/lib/chat/types"
 
 function getEmoteSrcSet(emote: ChatEmote) {
   if (emote.provider !== "twitch") {

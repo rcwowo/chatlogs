@@ -41,21 +41,26 @@ export function UserCardProvider({ children }: { children: ReactNode }) {
     setState({ target: null, anchor: null })
   }, [])
 
-  const toggle = useCallback((target: UserCardTarget, el: HTMLElement | null) => {
-    setState((current) => {
-      if (current.target && targetKey(current.target) === targetKey(target)) {
-        return { target: null, anchor: null }
-      }
-      return {
-        target,
-        anchor: el?.getBoundingClientRect() ?? null,
-      }
-    })
-  }, [])
+  const toggle = useCallback(
+    (target: UserCardTarget, el: HTMLElement | null) => {
+      setState((current) => {
+        if (current.target && targetKey(current.target) === targetKey(target)) {
+          return { target: null, anchor: null }
+        }
+        return {
+          target,
+          anchor: el?.getBoundingClientRect() ?? null,
+        }
+      })
+    },
+    []
+  )
 
   const isOpenFor = useCallback(
     (target: UserCardTarget) => {
-      return Boolean(state.target && targetKey(state.target) === targetKey(target))
+      return Boolean(
+        state.target && targetKey(state.target) === targetKey(target)
+      )
     },
     [state.target]
   )
@@ -72,7 +77,9 @@ export function UserCardProvider({ children }: { children: ReactNode }) {
   )
 
   return (
-    <UserCardContext.Provider value={value}>{children}</UserCardContext.Provider>
+    <UserCardContext.Provider value={value}>
+      {children}
+    </UserCardContext.Provider>
   )
 }
 

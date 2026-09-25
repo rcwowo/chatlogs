@@ -178,7 +178,7 @@ function HeaderChannelSwitcher({
           placeholder={channel ? "Switch channel" : "Open a channel"}
           autoComplete="off"
           autoFocus={!disabled}
-          className="h-9 rounded-full bg-muted dark:bg-muted focus-visible:ring-0"
+          className="h-9 rounded-full bg-muted focus-visible:ring-0 dark:bg-muted"
           onBlur={() => {
             setDraft("")
             setSwitching(false)

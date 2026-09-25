@@ -1,56 +1,56 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo } from "react"
 
 import {
-  addCustomProvider,
-  listProviders,
-  removeCustomProvider,
-  setProviderEnabled,
-  type Provider,
-} from "@/lib/providers"
+  addCustomProviderToSettings,
+  setProviderEnabledInSettings,
+  removeCustomProviderFromSettings,
+  type CustomProvider,
+} from "@/lib/settings/config"
+import { getProvidersFromSettings, type Provider } from "@/lib/providers"
+import { useSettings } from "@/hooks/use-settings"
 
 export function useProviders() {
-  const [providers, setProviders] = useState<Provider[]>(() => listProviders())
+  const { settings, updateSettings } = useSettings()
 
-  const refresh = useCallback(() => {
-    setProviders(listProviders())
-  }, [])
-
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === "chatlogs:providers") {
-        refresh()
-      }
-    }
-    window.addEventListener("storage", onStorage)
-    return () => window.removeEventListener("storage", onStorage)
-  }, [refresh])
-
+  const providers = useMemo(
+    () => getProvidersFromSettings(settings),
+    [settings]
+  )
   const enabled = useMemo(
     () => providers.filter((provider) => provider.enabled),
     [providers]
   )
 
-  const setEnabled = useCallback((id: string, enabled: boolean) => {
-    setProviderEnabled(id, enabled)
-    refresh()
-  }, [refresh])
+  const setEnabled = useCallback(
+    (id: string, nextEnabled: boolean) => {
+      updateSettings((current) =>
+        setProviderEnabledInSettings(current, id, nextEnabled)
+      )
+    },
+    [updateSettings]
+  )
 
   const add = useCallback(
-    (name: string, url: string) => {
-      const provider = addCustomProvider(name, url)
-      refresh()
-      return provider
+    (name: string, url: string): CustomProvider => {
+      let added: CustomProvider | null = null
+      updateSettings((current) => {
+        const result = addCustomProviderToSettings(current, name, url)
+        added = result.provider
+        return result.settings
+      })
+      return added!
     },
-    [refresh]
+    [updateSettings]
   )
 
   const remove = useCallback(
     (id: string) => {
-      removeCustomProvider(id)
-      refresh()
+      updateSettings((current) => removeCustomProviderFromSettings(current, id))
     },
-    [refresh]
+    [updateSettings]
   )
 
   return { providers, enabled, setEnabled, add, remove }
 }
+
+export type { Provider }

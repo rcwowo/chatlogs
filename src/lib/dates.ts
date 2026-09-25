@@ -41,12 +41,15 @@ export function formatDateKey(key: string) {
   const month = Number(parsed.month)
   if (parsed.day) {
     const day = Number(parsed.day)
-    return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      timeZone: "UTC",
-    })
+    return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString(
+      undefined,
+      {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        timeZone: "UTC",
+      }
+    )
   }
 
   return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString(undefined, {

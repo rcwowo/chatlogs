@@ -14,6 +14,8 @@ import { LogMessage } from "@/components/log-message"
 import { Button } from "@/components/ui/button"
 import type { ChatBadgeCatalog } from "@/lib/chat/badges"
 import type { ThirdPartyEmoteCatalog } from "@/lib/chat/emotes"
+import { getChatPresentationStyle } from "@/lib/chat/presentation"
+import { useSettingsSelector } from "@/hooks/use-settings"
 import type { MergedMessage } from "@/lib/rustlog"
 
 export function LogViewer({
@@ -199,6 +201,17 @@ export function LogViewer({
     onClearFilters()
   }
 
+  const appearance = useSettingsSelector((settings) => settings.appearance)
+  const presentationStyle = useMemo(
+    () =>
+      getChatPresentationStyle({
+        fontFamily: appearance.fontFamily,
+        fontSizePx: appearance.fontSizePx,
+        emoteScale: appearance.emoteScale,
+      }),
+    [appearance.emoteScale, appearance.fontFamily, appearance.fontSizePx]
+  )
+
   if (total === 0) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
@@ -223,7 +236,12 @@ export function LogViewer({
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div
           ref={parentRef}
+          data-alternating-rows={
+            appearance.alternatingRowBackgrounds ? "true" : undefined
+          }
+          data-separators={appearance.messageSeparators ? "true" : undefined}
           className="chat-scroll chat-presentation min-h-0 flex-1 overflow-auto pb-3"
+          style={presentationStyle}
         >
           <div
             className="relative w-full"
@@ -249,6 +267,7 @@ export function LogViewer({
                     message={message}
                     badges={badges}
                     emotes={emotes}
+                    striped={index % 2 === 1}
                     highlighted={message.key === highlightKey}
                     onJumpToContext={
                       isFiltered && onClearFilters

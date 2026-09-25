@@ -135,7 +135,8 @@ async function fetchBadgeSets(url: string, signal?: AbortSignal) {
   if (!response.ok) {
     throw new Error(`Failed to load badges (${response.status})`)
   }
-  const data = (await response.json()) as IvrBadgeSet[] | { data?: IvrBadgeSet[] }
+  const data = (await response.json()) as
+    IvrBadgeSet[] | { data?: IvrBadgeSet[] }
   return Array.isArray(data) ? data : (data.data ?? [])
 }
 
@@ -168,7 +169,10 @@ function writeCachedSets(key: string, sets: IvrBadgeSet[]) {
   try {
     window.localStorage.setItem(
       key,
-      JSON.stringify({ cachedAt: new Date().toISOString(), sets } satisfies CachedBadgeSets)
+      JSON.stringify({
+        cachedAt: new Date().toISOString(),
+        sets,
+      } satisfies CachedBadgeSets)
     )
   } catch {}
 }

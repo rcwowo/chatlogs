@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 
-import {
-  parseLogsQuery,
-  serializeLogsQuery,
-  type LogsQuery,
-} from "@/lib/query"
+import { parseLogsQuery, serializeLogsQuery, type LogsQuery } from "@/lib/query"
 
 export function useLogsQuery() {
   const [query, setQueryState] = useState<LogsQuery>(() =>

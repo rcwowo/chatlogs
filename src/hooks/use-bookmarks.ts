@@ -26,14 +26,11 @@ export function useBookmarks() {
     return () => window.removeEventListener("storage", onStorage)
   }, [refresh])
 
-  const add = useCallback(
-    (channel: string) => {
-      const next = addBookmark(channel)
-      setBookmarks(next)
-      return next
-    },
-    []
-  )
+  const add = useCallback((channel: string) => {
+    const next = addBookmark(channel)
+    setBookmarks(next)
+    return next
+  }, [])
 
   const remove = useCallback((channel: string) => {
     const next = removeBookmark(channel)

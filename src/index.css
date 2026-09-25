@@ -95,6 +95,8 @@
     --chat-notice-background: oklch(0.96 0.003 325.6 / 80%);
     --chat-announcement-background: oklch(0.96 0.003 325.6 / 55%);
     --chat-first-message-border: #00a865;
+    --chat-message-stripe: oklch(0 0 0 / 2.5%);
+    --chat-separator: oklch(0.922 0.005 325.62 / 70%);
 }
 
 .dark {
@@ -140,6 +142,8 @@
     --chat-notice-background: oklch(0.22 0.018 322.12 / 90%);
     --chat-announcement-background: oklch(0.22 0.018 322.12 / 55%);
     --chat-first-message-border: #00db84;
+    --chat-message-stripe: oklch(1 0 0 / 3.5%);
+    --chat-separator: oklch(1 0 0 / 8%);
 }
 
 @layer base {
@@ -178,7 +182,15 @@
   }
 
   .chat-presentation .chat-message {
-    padding-block: 0.25rem;
+    padding-block: calc(0.25rem + var(--chat-message-extra-padding-block, 0px));
+  }
+
+  .chat-presentation[data-separators="true"] .chat-message {
+    box-shadow: 0 -1px 0 0 var(--chat-separator);
+  }
+
+  .chat-presentation[data-alternating-rows="true"] .chat-message[data-striped="true"] {
+    background: var(--chat-message-stripe);
   }
 
   .chat-message {

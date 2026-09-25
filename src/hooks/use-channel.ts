@@ -257,8 +257,7 @@ export function useChannelStats(
   }
 
   return {
-    state:
-      state.status === "idle" || state.key !== key ? STATS_LOADING : state,
+    state: state.status === "idle" || state.key !== key ? STATS_LOADING : state,
     refreshing,
     refresh,
   }

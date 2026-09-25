@@ -84,6 +84,36 @@ const PROVIDER_PRIORITY: Array<Exclude<ChatEmoteProvider, "twitch">> = [
   "ffz",
 ]
 
+export type EmoteServiceOptions = {
+  bttvEnabled: boolean
+  ffzEnabled: boolean
+  seventvEnabled: boolean
+  zeroWidthEmotesEnabled: boolean
+}
+
+let serviceOptions: EmoteServiceOptions = {
+  bttvEnabled: true,
+  ffzEnabled: true,
+  seventvEnabled: true,
+  zeroWidthEmotesEnabled: true,
+}
+
+export function getEmoteServiceOptions(): EmoteServiceOptions {
+  return serviceOptions
+}
+
+export function setEmoteServiceOptions(options: EmoteServiceOptions) {
+  serviceOptions = { ...options }
+}
+
+/** Drop all cached catalogs so the next load honors the current options. */
+export function resetThirdPartyEmoteCache() {
+  globalCatalog = null
+  globalInflight = null
+  roomCache.clear()
+  roomInflight.clear()
+}
+
 let globalCatalog: ThirdPartyEmoteCatalog | null = null
 let globalInflight: Promise<EmoteCatalogEntry[]> | null = null
 const roomCache = new Map<string, ThirdPartyEmoteCatalog>()
@@ -179,7 +209,11 @@ export function hydrateMessageEmotes(
       continue
     }
 
-    if (isSevenTvZeroWidthEmote(entry) && lastEmoteIndex !== null) {
+    if (
+      isSevenTvZeroWidthEmote(entry) &&
+      serviceOptions.zeroWidthEmotesEnabled &&
+      lastEmoteIndex !== null
+    ) {
       ensureCopy()
       const target = result[lastEmoteIndex]!
       target.overlays = [
@@ -294,61 +328,78 @@ function catalogFromEntries(entries: EmoteCatalogEntry[]) {
 }
 
 async function fetchGlobalEmotes() {
+  const options = serviceOptions
   const [bttv, ffz, seventv] = await Promise.all([
-    fetchJson<BetterTtvEmote[]>(
-      "https://api.betterttv.net/3/cached/emotes/global"
-    )
-      .then((emotes) => emotes.map(mapBetterTtvEmote))
-      .catch(() => [] as EmoteCatalogEntry[]),
-    fetchJson<FrankerFaceZGlobalResponse>(
-      "https://api.frankerfacez.com/v1/set/global"
-    )
-      .then((response) =>
-        compactFrankerFaceZ(
-          extractFrankerFaceZGlobal(response).map(mapFrankerFaceZEmote)
+    options.bttvEnabled
+      ? fetchJson<BetterTtvEmote[]>(
+          "https://api.betterttv.net/3/cached/emotes/global"
         )
-      )
-      .catch(() => [] as EmoteCatalogEntry[]),
-    fetchJson<SevenTvEmoteSet>("https://7tv.io/v3/emote-sets/global")
-      .then((response) =>
-        compactSevenTv((response.emotes ?? []).map(mapSevenTvEmote))
-      )
-      .catch(() => [] as EmoteCatalogEntry[]),
+          .then((emotes) => emotes.map(mapBetterTtvEmote))
+          .catch(() => [] as EmoteCatalogEntry[])
+      : Promise.resolve([] as EmoteCatalogEntry[]),
+    options.ffzEnabled
+      ? fetchJson<FrankerFaceZGlobalResponse>(
+          "https://api.frankerfacez.com/v1/set/global"
+        )
+          .then((response) =>
+            compactFrankerFaceZ(
+              extractFrankerFaceZGlobal(response).map(mapFrankerFaceZEmote)
+            )
+          )
+          .catch(() => [] as EmoteCatalogEntry[])
+      : Promise.resolve([] as EmoteCatalogEntry[]),
+    options.seventvEnabled
+      ? fetchJson<SevenTvEmoteSet>("https://7tv.io/v3/emote-sets/global")
+          .then((response) =>
+            compactSevenTv((response.emotes ?? []).map(mapSevenTvEmote))
+          )
+          .catch(() => [] as EmoteCatalogEntry[])
+      : Promise.resolve([] as EmoteCatalogEntry[]),
   ])
 
   return [...seventv, ...bttv, ...ffz]
 }
 
 async function fetchRoomEmotes(roomId: string, signal?: AbortSignal) {
+  const options = serviceOptions
   const [bttv, ffz, seventv] = await Promise.all([
-    fetchJson<BetterTtvUserResponse>(
-      `https://api.betterttv.net/3/cached/users/twitch/${encodeURIComponent(roomId)}`,
-      signal
-    )
-      .then((response) =>
-        [...(response.channelEmotes ?? []), ...(response.sharedEmotes ?? [])].map(
-          mapBetterTtvEmote
+    options.bttvEnabled
+      ? fetchJson<BetterTtvUserResponse>(
+          `https://api.betterttv.net/3/cached/users/twitch/${encodeURIComponent(roomId)}`,
+          signal
         )
-      )
-      .catch(() => [] as EmoteCatalogEntry[]),
-    fetchJson<FrankerFaceZRoomResponse>(
-      `https://api.frankerfacez.com/v1/room/id/${encodeURIComponent(roomId)}`,
-      signal
-    )
-      .then((response) =>
-        compactFrankerFaceZ(
-          extractFrankerFaceZ(response.sets).map(mapFrankerFaceZEmote)
+          .then((response) =>
+            [
+              ...(response.channelEmotes ?? []),
+              ...(response.sharedEmotes ?? []),
+            ].map(mapBetterTtvEmote)
+          )
+          .catch(() => [] as EmoteCatalogEntry[])
+      : Promise.resolve([] as EmoteCatalogEntry[]),
+    options.ffzEnabled
+      ? fetchJson<FrankerFaceZRoomResponse>(
+          `https://api.frankerfacez.com/v1/room/id/${encodeURIComponent(roomId)}`,
+          signal
         )
-      )
-      .catch(() => [] as EmoteCatalogEntry[]),
-    fetchJson<SevenTvUserResponse>(
-      `https://7tv.io/v3/users/twitch/${encodeURIComponent(roomId)}`,
-      signal
-    )
-      .then((response) =>
-        compactSevenTv((response.emote_set?.emotes ?? []).map(mapSevenTvEmote))
-      )
-      .catch(() => [] as EmoteCatalogEntry[]),
+          .then((response) =>
+            compactFrankerFaceZ(
+              extractFrankerFaceZ(response.sets).map(mapFrankerFaceZEmote)
+            )
+          )
+          .catch(() => [] as EmoteCatalogEntry[])
+      : Promise.resolve([] as EmoteCatalogEntry[]),
+    options.seventvEnabled
+      ? fetchJson<SevenTvUserResponse>(
+          `https://7tv.io/v3/users/twitch/${encodeURIComponent(roomId)}`,
+          signal
+        )
+          .then((response) =>
+            compactSevenTv(
+              (response.emote_set?.emotes ?? []).map(mapSevenTvEmote)
+            )
+          )
+          .catch(() => [] as EmoteCatalogEntry[])
+      : Promise.resolve([] as EmoteCatalogEntry[]),
   ])
 
   return [...seventv, ...bttv, ...ffz]
@@ -391,7 +442,9 @@ function extractFrankerFaceZGlobal(response: FrankerFaceZGlobalResponse) {
   )
 }
 
-function extractFrankerFaceZ(sets: Record<string, FrankerFaceZSet> | undefined) {
+function extractFrankerFaceZ(
+  sets: Record<string, FrankerFaceZSet> | undefined
+) {
   return Object.values(sets ?? {}).flatMap((set) => set.emoticons ?? [])
 }
 
@@ -438,7 +491,10 @@ function withHttps(url: string) {
 }
 
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetchTimeout(url, { signal, timeoutMs: FETCH_TIMEOUT_MS })
+  const response = await fetchTimeout(url, {
+    signal,
+    timeoutMs: FETCH_TIMEOUT_MS,
+  })
   if (!response.ok) {
     throw new Error(`Failed to fetch ${url}: ${response.status}`)
   }

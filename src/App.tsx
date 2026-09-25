@@ -3,18 +3,12 @@ import { useMemo, useState } from "react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { ChannelHeader } from "@/components/channel-header"
 import { LogsPanel } from "@/components/logs-panel"
-import { ProviderSettings } from "@/components/provider-settings"
+import { SettingsDialog } from "@/components/settings/settings-dialog"
 import { UserPanel } from "@/components/user-panel"
 import { UserCardProvider } from "@/hooks/use-user-card"
 import { useChatCatalog } from "@/hooks/use-chat-catalog"
+import { useEmoteOptionsSync } from "@/hooks/use-emote-options-sync"
 import { useTwitchCosmetics } from "@/hooks/use-twitch-cosmetics"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Toaster } from "@/components/ui/sonner"
@@ -29,7 +23,7 @@ import { parseTarget } from "@/lib/twitch"
 
 export function App() {
   const { query, setQuery, replaceQuery } = useLogsQuery()
-  const { providers, enabled, setEnabled, add, remove } = useProviders()
+  const { enabled } = useProviders()
   const {
     bookmarks,
     add: addBookmark,
@@ -37,7 +31,12 @@ export function App() {
     move: moveBookmark,
     has,
   } = useBookmarks()
-  const [providersOpen, setProvidersOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const emoteOptionsToken = useEmoteOptionsSync()
+
+  function openSettings() {
+    setSettingsOpen(true)
+  }
 
   const channel = parseTarget(query.channel)?.value ?? ""
   const meta = useChannel(channel, enabled)
@@ -66,7 +65,8 @@ export function App() {
   const roomId = meta.status === "ready" ? (meta.profile?.id ?? "") : ""
   const catalog = useChatCatalog(
     roomId,
-    query.tab === "logs" && meta.status === "ready"
+    query.tab === "logs" && meta.status === "ready",
+    emoteOptionsToken
   )
   const { state: stats, refresh: refreshStats } = useChannelStats(
     channel,
@@ -109,7 +109,7 @@ export function App() {
           onOpenChannel={openChannel}
           onRemoveBookmark={removeBookmark}
           onMoveBookmark={moveBookmark}
-          onOpenProviders={() => setProvidersOpen(true)}
+          onOpenSettings={openSettings}
         />
         <SidebarInset className="h-svh overflow-hidden">
           <div className="flex h-full min-h-0 flex-1 flex-col gap-4 p-6">
@@ -182,25 +182,7 @@ export function App() {
           </div>
         </SidebarInset>
 
-        <Sheet open={providersOpen} onOpenChange={setProvidersOpen}>
-          <SheetContent className="flex flex-col sm:max-w-md">
-            <SheetHeader>
-              <SheetTitle>Providers</SheetTitle>
-              <SheetDescription>
-                Built-in rustlog endpoints can be turned off. Anything you add
-                is stored in this browser.
-              </SheetDescription>
-            </SheetHeader>
-            <div className="flex min-h-0 flex-1 flex-col px-4 pb-4">
-              <ProviderSettings
-                providers={providers}
-                onEnabledChange={setEnabled}
-                onAdd={add}
-                onRemove={remove}
-              />
-            </div>
-          </SheetContent>
-        </Sheet>
+        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       </SidebarProvider>
       <Toaster />
     </TooltipProvider>

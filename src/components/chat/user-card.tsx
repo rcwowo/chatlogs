@@ -25,7 +25,11 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useUserCard } from "@/hooks/use-user-card"
-import { hydrateMessageEmotes, type ThirdPartyEmoteCatalog } from "@/lib/chat/emotes"
+import { useSettingsSelector } from "@/hooks/use-settings"
+import {
+  hydrateMessageEmotes,
+  type ThirdPartyEmoteCatalog,
+} from "@/lib/chat/emotes"
 import { parseLogChat, formatLogTimestamp } from "@/lib/chat/tags"
 import { twitchChannelUrl } from "@/lib/chat/types"
 import type { MergedMessage } from "@/lib/rustlog"
@@ -68,10 +72,7 @@ function computeAnchorPosition(rect: DOMRect | null) {
   return {
     left: Math.max(
       margin,
-      Math.min(
-        rect.left,
-        window.innerWidth - USER_CARD_WIDTH_PX - margin
-      )
+      Math.min(rect.left, window.innerWidth - USER_CARD_WIDTH_PX - margin)
     ),
     top: Math.max(
       margin,
@@ -208,6 +209,9 @@ function UserCardDialog({
   const { close } = useUserCard()
   const panelRef = useRef<HTMLDivElement>(null)
   const actionsMenuOpenRef = useRef(false)
+  const timestampFormat = useSettingsSelector(
+    (settings) => settings.appearance.messageTimestampFormat
+  )
   const anchorPosition = useMemo(
     () => computeAnchorPosition(anchor ?? null),
     [anchor]
@@ -331,7 +335,11 @@ function UserCardDialog({
     const login = target.userName.toLowerCase()
     const id = target.userId
     const result: MergedMessage[] = []
-    for (let index = messages.length - 1; index >= 0 && result.length < 8; index -= 1) {
+    for (
+      let index = messages.length - 1;
+      index >= 0 && result.length < 8;
+      index -= 1
+    ) {
       const message = messages[index]!
       if (id && message.tags["user-id"] === id) {
         result.push(message)
@@ -361,11 +369,7 @@ function UserCardDialog({
         label: "View Channel",
         icon: <ExternalLinkIcon className="size-2.5 shrink-0" />,
         onClick: () => {
-          window.open(
-            twitchChannelUrl(login),
-            "_blank",
-            "noopener,noreferrer"
-          )
+          window.open(twitchChannelUrl(login), "_blank", "noopener,noreferrer")
         },
       },
     ]
@@ -426,7 +430,9 @@ function UserCardDialog({
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuGroup>
                 <DropdownMenuLabel>Metadata</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => void copyText("Username", login)}>
+                <DropdownMenuItem
+                  onClick={() => void copyText("Username", login)}
+                >
                   Copy username
                   <CopyIcon className="ml-auto size-3.5 text-muted-foreground" />
                 </DropdownMenuItem>
@@ -575,7 +581,10 @@ function UserCardDialog({
                         parsed.emotes,
                         emotes
                       )
-                      const timestamp = formatLogTimestamp(message.timestamp)
+                      const timestamp = formatLogTimestamp(
+                        message.timestamp,
+                        timestampFormat
+                      )
                       return (
                         <div
                           key={message.key}
@@ -586,7 +595,10 @@ function UserCardDialog({
                               {timestamp}
                             </time>
                           ) : null}
-                          <ChatMessageBody text={parsed.text} emotes={hydrated} />
+                          <ChatMessageBody
+                            text={parsed.text}
+                            emotes={hydrated}
+                          />
                         </div>
                       )
                     })}

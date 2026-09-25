@@ -96,9 +96,7 @@ function CopyStat({
       <div
         className={cn(
           "truncate font-medium",
-          variant === "tile"
-            ? "text-lg tracking-tight tabular-nums"
-            : "text-sm"
+          variant === "tile" ? "text-lg tracking-tight tabular-nums" : "text-sm"
         )}
       >
         {value}
@@ -220,7 +218,7 @@ export function UserPanel({
           </button>
         ) : null}
 
-        <div className="grid grid-cols-1 divide-y divide-border/60 overflow-hidden rounded-xl bg-muted/60 sm:grid-cols-3 sm:divide-y-0 sm:divide-x">
+        <div className="grid grid-cols-1 divide-y divide-border/60 overflow-hidden rounded-xl bg-muted/60 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           <CopyStat
             variant="tile"
             label="Followers"
@@ -270,7 +268,7 @@ export function UserPanel({
             <p className="px-4 pt-3 pb-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
               Details
             </p>
-            <div className="grid grid-cols-1 divide-y divide-border/60 border-b border-border/60 sm:grid-cols-3 sm:divide-y-0 sm:divide-x">
+            <div className="grid grid-cols-1 divide-y divide-border/60 border-b border-border/60 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
               <CopyStat
                 label="User type"
                 value={
@@ -311,10 +309,19 @@ export function UserPanel({
             <CopyStat
               label="Coverage"
               value={
-                oldest ? `${formatDateKey(oldest)} to ${formatDateKey(latest)}` : "Unknown"
+                oldest
+                  ? `${formatDateKey(oldest)} to ${formatDateKey(latest)}`
+                  : "Unknown"
               }
-              copy={oldest ? `${formatDateKey(oldest)} to ${formatDateKey(latest)}` : null}
-              className={cn("w-full", rules.length > 0 && "border-b border-border/60")}
+              copy={
+                oldest
+                  ? `${formatDateKey(oldest)} to ${formatDateKey(latest)}`
+                  : null
+              }
+              className={cn(
+                "w-full",
+                rules.length > 0 && "border-b border-border/60"
+              )}
             />
             {rules.length > 0 ? (
               <button
@@ -339,10 +346,7 @@ export function UserPanel({
         </div>
 
         {cosmeticsEmpty ? null : (
-          <CosmeticsCard
-            cosmetics={cosmetics}
-            loading={cosmeticsLoading}
-          />
+          <CosmeticsCard cosmetics={cosmetics} loading={cosmeticsLoading} />
         )}
       </div>
     </div>
