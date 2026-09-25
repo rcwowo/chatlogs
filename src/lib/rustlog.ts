@@ -286,6 +286,48 @@ export async function fetchChannelLogs(
   }
 }
 
+export type RawLogBatch = {
+  providerId: string
+  content: string
+}
+
+export async function fetchRawChannelLogs(
+  providers: Provider[],
+  channelInput: string,
+  dateKey: string,
+  signal?: AbortSignal
+) {
+  const channel = parseTarget(channelInput)
+  const date = fromDateKey(dateKey)
+  if (!channel || !date?.day) {
+    return [] as RawLogBatch[]
+  }
+
+  const path = `${rustlogPath(channel, "channel")}/${date.year}/${date.month}/${date.day}`
+  const batches = await Promise.all(
+    providers.map(async (provider): Promise<RawLogBatch | null> => {
+      try {
+        const response = await fetchTimeout(buildUrl(provider.url, path), {
+          signal,
+          timeoutMs: REQUEST_MS,
+        })
+        if (!response.ok) {
+          return null
+        }
+        const text = await response.text()
+        if (!text.trim()) {
+          return null
+        }
+        return { providerId: provider.id, content: text }
+      } catch {
+        return null
+      }
+    })
+  )
+
+  return batches.filter((batch) => batch !== null)
+}
+
 export type ChannelStats = {
   messageCount: number
   topChatters: Array<{

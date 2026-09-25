@@ -3,6 +3,9 @@ import {
   ArrowDownWideNarrowIcon,
   ArrowUpNarrowWideIcon,
   CalendarDaysIcon,
+  CheckIcon,
+  CopyIcon,
+  FileTextIcon,
   FilterIcon,
   RefreshCwIcon,
   XIcon,
@@ -24,6 +27,9 @@ import type { ChatCatalog } from "@/hooks/use-chat-catalog"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
 import type { DayLogsState } from "@/hooks/use-day-logs"
 import { formatDateKey } from "@/lib/dates"
+import { copyText } from "@/lib/clipboard"
+import type { Provider } from "@/lib/providers"
+import { fetchRawChannelLogs, type RawLogBatch } from "@/lib/rustlog"
 import {
   collectSearchUsernames,
   getSearchSuggestions,
@@ -45,6 +51,7 @@ export function LogsPanel({
   userFilter,
   filterQuery,
   logs,
+  logsProviders,
   onRefreshLogs,
   refreshingLogs,
   catalog,
@@ -58,6 +65,7 @@ export function LogsPanel({
   userFilter: string
   filterQuery: string
   logs: DayLogsState
+  logsProviders: Provider[]
   onRefreshLogs: () => void
   refreshingLogs: boolean
   catalog: ChatCatalog
@@ -67,6 +75,14 @@ export function LogsPanel({
 }) {
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [filterOpen, setFilterOpen] = useState(false)
+  const [rawOpen, setRawOpen] = useState(false)
+  const [rawCopied, setRawCopied] = useState(false)
+  const [rawState, setRawState] = useState<{
+    key: string
+    status: "loading" | "ready" | "error"
+    batches: RawLogBatch[]
+    message?: string
+  }>({ key: "", status: "loading", batches: [] })
   const [newestAtBottom, setNewestAtBottom] = useState(() => {
     const stored = readJson<unknown>(ORDER_STORAGE_KEY, true)
     return typeof stored === "boolean" ? stored : true
@@ -84,6 +100,58 @@ export function LogsPanel({
   }
 
   const messages = logs.status === "ready" ? logs.messages : []
+
+  const rawKey = `${channelLogin}|${date}|${logsProviders
+    .map((provider) => provider.id)
+    .join(",")}`
+
+  useEffect(() => {
+    if (!rawOpen || logs.status !== "ready" || rawState.key === rawKey) {
+      return
+    }
+    const controller = new AbortController()
+    let cancelled = false
+    fetchRawChannelLogs(logsProviders, channelLogin, date, controller.signal)
+      .then((batches) => {
+        if (!cancelled) {
+          setRawState({
+            key: rawKey,
+            status: batches.length > 0 ? "ready" : "error",
+            batches,
+            message:
+              batches.length > 0
+                ? undefined
+                : "No raw logs found for this day.",
+          })
+        }
+      })
+      .catch(() => {
+        if (!cancelled && !controller.signal.aborted) {
+          setRawState({ key: rawKey, status: "error", batches: [] })
+        }
+      })
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [
+    rawOpen,
+    rawKey,
+    logs.status,
+    logsProviders,
+    channelLogin,
+    date,
+    rawState.key,
+  ])
+
+  function copyRawLogs() {
+    void copyText(
+      "Raw logs",
+      rawState.batches.map((batch) => batch.content).join("\n")
+    )
+    setRawCopied(true)
+    setTimeout(() => setRawCopied(false), 1500)
+  }
   const usernames = useMemo(
     () => collectSearchUsernames(messages),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -195,6 +263,23 @@ export function LogsPanel({
         </p>
 
         <div className="ml-auto flex items-center gap-2">
+          <Button
+            type="button"
+            size="icon"
+            variant={rawOpen ? "secondary" : "ghost"}
+            className={cn(
+              "rounded-full",
+              rawOpen
+                ? "bg-purple-500/20 text-purple-600 hover:text-purple-600 dark:bg-purple-400/20 dark:text-purple-300 dark:hover:text-purple-300"
+                : "bg-background text-muted-foreground hover:text-foreground"
+            )}
+            aria-label={rawOpen ? "Show formatted logs" : "Show raw logs"}
+            title={rawOpen ? "Show formatted logs" : "Show raw logs"}
+            onClick={() => setRawOpen((open) => !open)}
+          >
+            <FileTextIcon />
+          </Button>
+
           <Button
             type="button"
             size="icon"
@@ -391,7 +476,52 @@ export function LogsPanel({
           </p>
         ) : null}
 
-        {logs.status === "ready" ? (
+        {logs.status === "ready" && rawOpen ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex items-center gap-2 border-b px-3 py-1.5">
+              <span className="text-xs text-muted-foreground">
+                {rawState.key === rawKey && rawState.status === "ready"
+                  ? rawState.batches.map((batch) => batch.providerId).join(", ")
+                  : "Raw"}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="ml-auto h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                disabled={
+                  !(rawState.key === rawKey && rawState.status === "ready")
+                }
+                onClick={copyRawLogs}
+              >
+                {rawCopied ? <CheckIcon /> : <CopyIcon />}
+                {rawCopied ? "Copied" : "Copy"}
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              {rawState.key !== rawKey ? (
+                <div className="flex flex-col gap-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-11/12" />
+                  <Skeleton className="h-4 w-4/5" />
+                </div>
+              ) : rawState.status === "error" ? (
+                <p className="text-sm text-muted-foreground">
+                  {rawState.message ?? "Failed to load raw logs."}
+                </p>
+              ) : (
+                rawState.batches.map((batch) => (
+                  <pre
+                    key={batch.providerId}
+                    className="font-mono text-xs leading-relaxed break-words whitespace-pre-wrap"
+                  >
+                    {batch.content}
+                  </pre>
+                ))
+              )}
+            </div>
+          </div>
+        ) : logs.status === "ready" ? (
           <LogViewer
             key={`${channelLogin}|${date}`}
             messages={queryActive ? filtered : messages}

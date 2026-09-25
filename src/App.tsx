@@ -145,6 +145,7 @@ export function App() {
                   userFilter={query.user}
                   filterQuery={query.q}
                   logs={logs}
+                  logsProviders={enabled}
                   onRefreshLogs={() => {
                     dayLogs.refresh()
                     refreshStats()
