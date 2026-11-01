@@ -535,37 +535,39 @@ function UserCardDialog({
 
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="space-y-4 p-4">
-              {profile?.bio ? (
-                <InfoTile label="Bio" value={profile.bio} />
-              ) : null}
+              <div className="space-y-2">
+                {profile?.bio ? (
+                  <InfoTile label="Bio" value={profile.bio} />
+                ) : null}
 
-              <div
-                className={cn(
-                  "grid gap-2",
-                  userType ? "grid-cols-3" : "grid-cols-2"
-                )}
-              >
-                {status === "loading" && !createdAt ? (
-                  <Skeleton className="h-14 rounded-lg" />
-                ) : createdAt ? (
+                <div
+                  className={cn(
+                    "grid gap-2",
+                    userType ? "grid-cols-3" : "grid-cols-2"
+                  )}
+                >
+                  {status === "loading" && !createdAt ? (
+                    <Skeleton className="h-14 rounded-lg" />
+                  ) : createdAt ? (
+                    <InfoTile
+                      icon={<CalendarDaysIcon className="size-3" />}
+                      label="Created"
+                      value={createdAt}
+                    />
+                  ) : null}
                   <InfoTile
-                    icon={<CalendarDaysIcon className="size-3" />}
-                    label="Created"
-                    value={createdAt}
+                    icon={<SparklesIcon className="size-3" />}
+                    label="Subscription"
+                    value={status === "loading" ? "…" : subscriptionLabel}
                   />
-                ) : null}
-                <InfoTile
-                  icon={<SparklesIcon className="size-3" />}
-                  label="Subscription"
-                  value={status === "loading" ? "…" : subscriptionLabel}
-                />
-                {userType ? (
-                  <InfoTile
-                    icon={<UsersIcon className="size-3" />}
-                    label="User type"
-                    value={userType}
-                  />
-                ) : null}
+                  {userType ? (
+                    <InfoTile
+                      icon={<UsersIcon className="size-3" />}
+                      label="User type"
+                      value={userType}
+                    />
+                  ) : null}
+                </div>
               </div>
 
               <div className="space-y-2">
