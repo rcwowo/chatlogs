@@ -15,7 +15,9 @@ export const BUILTIN_PROVIDERS: Array<Omit<Provider, "enabled" | "builtin">> = [
   { id: "rcw-lab", name: "RCW Lab", url: "https://logs.lab.rcw.lol" },
 ]
 
-export function getProvidersFromSettings(settings: Settings): Provider[] {
+export function getProvidersFromSettings(
+  settings: Pick<Settings, "providers">
+): Provider[] {
   const disabled = new Set(settings.providers.disabledBuiltin)
 
   const builtins: Provider[] = BUILTIN_PROVIDERS.map((provider) => ({

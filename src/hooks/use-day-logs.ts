@@ -1,13 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
+import {
+  recordProviderResult,
+  startProgress,
+  type LoadProgress,
+} from "@/lib/load-progress"
 import type { Provider } from "@/lib/providers"
-import { fetchChannelLogs, type MergedMessage } from "@/lib/rustlog"
+import {
+  fetchChannelLogs,
+  type MergedMessage,
+  type ProviderStatus,
+} from "@/lib/rustlog"
 
 export type DayLogsState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "ready"; messages: MergedMessage[] }
-  | { status: "error"; message: string }
+  | { status: "error"; message: string; statuses?: ProviderStatus[] }
 
 const IDLE = { status: "idle" } as const
 const LOADING = { status: "loading" } as const
@@ -25,6 +34,17 @@ export function useDayLogs(
   const cache = useRef(new Map<string, MergedMessage[]>())
   const [refreshTick, setRefreshTick] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
+  const [progress, setProgress] = useState<LoadProgress | null>(null)
+  const skipRef = useRef<{ key: string; controller: AbortController } | null>(
+    null
+  )
+
+  /** Stop waiting on slow providers and show what has loaded so far. */
+  const skip = useCallback(() => {
+    if (skipRef.current?.key === key) {
+      skipRef.current.controller.abort()
+    }
+  }, [key])
 
   const refresh = useCallback(() => {
     if (!enabled || !channel || !date) {
@@ -52,6 +72,8 @@ export function useDayLogs(
     }
 
     const controller = new AbortController()
+    const skipController = new AbortController()
+    skipRef.current = { key, controller: skipController }
     let cancelled = false
 
     async function run() {
@@ -64,12 +86,38 @@ export function useDayLogs(
       setState((current) =>
         current.key === key ? current : { key, status: "loading" }
       )
+      setProgress(
+        startProgress(
+          key,
+          providers.map((provider) => provider.id)
+        )
+      )
       try {
         const result = await fetchChannelLogs(
           providers,
           channel,
           date,
-          controller.signal
+          controller.signal,
+          {
+            onProvider: (item) => {
+              if (!cancelled) {
+                setProgress(
+                  (current) =>
+                    current && recordProviderResult(current, key, item)
+                )
+              }
+            },
+            skip: skipController.signal,
+            onMerge: (total) => {
+              if (!cancelled) {
+                setProgress((current) =>
+                  current?.key === key
+                    ? { ...current, merging: { total } }
+                    : current
+                )
+              }
+            },
+          }
         )
         if (cancelled) {
           return
@@ -83,10 +131,14 @@ export function useDayLogs(
             key,
             status: "error",
             message: firstError || "Failed to load messages.",
+            statuses: result.statuses,
           })
           return
         }
-        cache.current.set(key, result.messages)
+        // Partial results aren't cached, so coming back refetches everything.
+        if (!result.statuses.some((item) => item.skipped)) {
+          cache.current.set(key, result.messages)
+        }
         setRefreshing(false)
         setState({ key, status: "ready", messages: result.messages })
       } catch (error) {
@@ -112,12 +164,14 @@ export function useDayLogs(
   }, [channel, date, enabled, key, providers, refreshTick])
 
   if (!enabled || !channel || !date) {
-    return { state: IDLE, refreshing: false, refresh }
+    return { state: IDLE, refreshing: false, refresh, skip, progress: null }
   }
 
   return {
     state: state.status === "idle" || state.key !== key ? LOADING : state,
     refreshing,
     refresh,
+    skip,
+    progress: progress?.key === key ? progress : null,
   }
 }

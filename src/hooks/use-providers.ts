@@ -12,9 +12,12 @@ import { useSettings } from "@/hooks/use-settings"
 export function useProviders() {
   const { settings, updateSettings } = useSettings()
 
+  // Settings are rebuilt on every change, so key the list by its contents.
+  // Otherwise unrelated changes (like appearance) would restart log loading.
+  const providersJson = JSON.stringify(settings.providers)
   const providers = useMemo(
-    () => getProvidersFromSettings(settings),
-    [settings]
+    () => getProvidersFromSettings({ providers: JSON.parse(providersJson) }),
+    [providersJson]
   )
   const enabled = useMemo(
     () => providers.filter((provider) => provider.enabled),

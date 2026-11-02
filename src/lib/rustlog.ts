@@ -4,7 +4,8 @@ import {
   toDateKey,
   type AvailableLogDate,
 } from "@/lib/dates"
-import { fetchTimeout } from "@/lib/http"
+import { fetchTimeout, isTimeoutError } from "@/lib/http"
+import { PROVIDER_SLOW_MS, recordProviderOutcome } from "@/lib/provider-health"
 import type { Provider } from "@/lib/providers"
 import { parseTarget, type NamedTarget } from "@/lib/twitch"
 
@@ -39,7 +40,20 @@ export type ProviderStatus = {
   providerId: string
   status: "ok" | "missing" | "error"
   error?: string
+  timedOut?: boolean
+  /** The user chose to continue without waiting for this provider. */
+  skipped?: boolean
 }
+
+/**
+ * Reported as each provider finishes, so the UI can show progress before the
+ * slowest provider responds. `count` is days for discovery, messages for logs.
+ */
+export type ProviderResult = ProviderStatus & { count: number }
+
+export type ProviderResultHandler = (result: ProviderResult) => void
+
+export const REQUEST_TIMEOUT_MS = 20000
 
 export type DateDiscovery = {
   dates: string[]
@@ -47,7 +61,7 @@ export type DateDiscovery = {
   providersForDate: Map<string, string[]>
 }
 
-const REQUEST_MS = 20000
+const REQUEST_MS = REQUEST_TIMEOUT_MS
 
 function rustlogPath(target: NamedTarget, kind: "channel" | "user") {
   if (kind === "channel") {
@@ -78,7 +92,14 @@ async function fetchJson<T>(
   url: string,
   signal?: AbortSignal
 ): Promise<
-  { ok: true; data: T } | { ok: false; missing: boolean; error: string }
+  | { ok: true; data: T }
+  | {
+      ok: false
+      missing: boolean
+      error: string
+      timedOut?: boolean
+      skipped?: boolean
+    }
 > {
   try {
     const response = await fetchTimeout(url, {
@@ -111,8 +132,62 @@ async function fetchJson<T>(
     if (signal?.aborted) {
       throw error
     }
+    if (isTimeoutError(error)) {
+      return {
+        ok: false,
+        missing: false,
+        timedOut: true,
+        error: `Timed out after ${Math.round(REQUEST_MS / 1000)}s`,
+      }
+    }
     const message = error instanceof Error ? error.message : "Request failed"
     return { ok: false, missing: false, error: message }
+  }
+}
+
+/**
+ * Fetches one provider's part of a load. Aborting `skip` stops
+ * waiting on it without failing the whole load, and the outcome feeds the
+ * repeated-failure warning.
+ */
+async function fetchProviderJson<T>(
+  providerId: string,
+  url: string,
+  signal?: AbortSignal,
+  skip?: AbortSignal
+) {
+  const skipped = {
+    ok: false as const,
+    missing: false,
+    skipped: true,
+    timedOut: false,
+    error: "Skipped",
+  }
+  const startedAt = Date.now()
+  // Skipping a provider that was already slow counts against it too.
+  const markSkipped = () => {
+    if (Date.now() - startedAt >= PROVIDER_SLOW_MS) {
+      recordProviderOutcome(providerId, "failed")
+    }
+    return skipped
+  }
+  const signals = [signal, skip].filter((item) => item !== undefined)
+  const combined = signals.length > 1 ? AbortSignal.any(signals) : signal
+  try {
+    const result = await fetchJson<T>(url, combined)
+    if (!result.ok && skip?.aborted) {
+      return markSkipped()
+    }
+    recordProviderOutcome(
+      providerId,
+      result.ok || result.missing ? "ok" : "failed"
+    )
+    return result
+  } catch (error) {
+    if (skip?.aborted && !signal?.aborted) {
+      return markSkipped()
+    }
+    throw error
   }
 }
 
@@ -187,7 +262,9 @@ export function mergeMessages(
 export async function discoverAvailableLogs(
   providers: Provider[],
   channelInput: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onProvider?: ProviderResultHandler,
+  skip?: AbortSignal
 ): Promise<DateDiscovery> {
   const channel = parseTarget(channelInput)
   if (!channel) {
@@ -201,22 +278,37 @@ export async function discoverAvailableLogs(
   const results = await Promise.all(
     providers.map(async (provider) => {
       const url = buildUrl(provider.url, "list", query)
-      const result = await fetchJson<{ availableLogs?: AvailableLogDate[] }>(
-        url,
-        signal
-      )
+      const result = await fetchProviderJson<{
+        availableLogs?: AvailableLogDate[]
+      }>(provider.id, url, signal, skip)
       if (result.ok) {
         const dates = result.data.availableLogs ?? []
+        onProvider?.({
+          providerId: provider.id,
+          status: "ok",
+          count: dates.filter((date) => date.day).length,
+        })
         return {
           providerId: provider.id,
           status: "ok" as const,
           dates,
         }
       }
+      const status = result.missing ? ("missing" as const) : ("error" as const)
+      onProvider?.({
+        providerId: provider.id,
+        status,
+        error: result.error,
+        timedOut: result.timedOut,
+        skipped: result.skipped,
+        count: 0,
+      })
       return {
         providerId: provider.id,
-        status: result.missing ? ("missing" as const) : ("error" as const),
+        status,
         error: result.error,
+        timedOut: result.timedOut,
+        skipped: result.skipped,
         dates: [] as AvailableLogDate[],
       }
     })
@@ -234,11 +326,7 @@ export async function discoverAvailableLogs(
 
   return {
     dates: mergeDateKeys(results.map((result) => result.dates)),
-    statuses: results.map(({ providerId, status, error }) => ({
-      providerId,
-      status,
-      error,
-    })),
+    statuses: results.map(toStatus),
     providersForDate,
   }
 }
@@ -247,7 +335,14 @@ export async function fetchChannelLogs(
   providers: Provider[],
   channelInput: string,
   dateKey: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  callbacks: {
+    onProvider?: ProviderResultHandler
+    /** Called once every provider has answered, before merging starts. */
+    onMerge?: (total: number) => void
+    /** Abort to stop waiting on providers that haven't answered yet. */
+    skip?: AbortSignal
+  } = {}
 ) {
   const channel = parseTarget(channelInput)
   const date = fromDateKey(dateKey)
@@ -259,31 +354,75 @@ export async function fetchChannelLogs(
   const batches = await Promise.all(
     providers.map(async (provider) => {
       const url = buildUrl(provider.url, path, { json: "1" })
-      const result = await fetchJson<{ messages?: ChatMessage[] }>(url, signal)
+      const result = await fetchProviderJson<{ messages?: ChatMessage[] }>(
+        provider.id,
+        url,
+        signal,
+        callbacks.skip
+      )
       if (result.ok) {
+        const messages = result.data.messages ?? []
+        callbacks.onProvider?.({
+          providerId: provider.id,
+          status: "ok",
+          count: messages.length,
+        })
         return {
           providerId: provider.id,
           status: "ok" as const,
-          messages: result.data.messages ?? [],
+          messages,
         }
       }
+      const status = result.missing ? ("missing" as const) : ("error" as const)
+      callbacks.onProvider?.({
+        providerId: provider.id,
+        status,
+        error: result.error,
+        timedOut: result.timedOut,
+        skipped: result.skipped,
+        count: 0,
+      })
       return {
         providerId: provider.id,
-        status: result.missing ? ("missing" as const) : ("error" as const),
+        status,
         error: result.error,
+        timedOut: result.timedOut,
+        skipped: result.skipped,
         messages: [] as ChatMessage[],
       }
     })
   )
 
+  const total = batches.reduce((sum, batch) => sum + batch.messages.length, 0)
+  if (callbacks.onMerge && total > 0) {
+    callbacks.onMerge(total)
+    // Merging blocks the main thread, so let the UI paint the merge step first.
+    await nextPaint()
+    if (signal?.aborted) {
+      throw signal.reason ?? new DOMException("Aborted", "AbortError")
+    }
+  }
+
   return {
     messages: mergeMessages(batches),
-    statuses: batches.map(({ providerId, status, error }) => ({
-      providerId,
-      status,
-      error,
-    })),
+    statuses: batches.map(toStatus),
   }
+}
+
+function toStatus({
+  providerId,
+  status,
+  error,
+  timedOut,
+  skipped,
+}: ProviderStatus): ProviderStatus {
+  return { providerId, status, error, timedOut, skipped }
+}
+
+function nextPaint() {
+  return new Promise<void>((resolve) => {
+    requestAnimationFrame(() => setTimeout(resolve, 0))
+  })
 }
 
 export type RawLogBatch = {
@@ -312,14 +451,22 @@ export async function fetchRawChannelLogs(
           timeoutMs: REQUEST_MS,
         })
         if (!response.ok) {
+          recordProviderOutcome(
+            provider.id,
+            response.status === 404 || response.status === 403 ? "ok" : "failed"
+          )
           return null
         }
         const text = await response.text()
+        recordProviderOutcome(provider.id, "ok")
         if (!text.trim()) {
           return null
         }
         return { providerId: provider.id, content: text }
       } catch {
+        if (!signal?.aborted) {
+          recordProviderOutcome(provider.id, "failed")
+        }
         return null
       }
     })
@@ -356,7 +503,11 @@ export async function fetchChannelStats(
   const results = await Promise.all(
     providers.map(async (provider) => {
       const url = buildUrl(provider.url, path)
-      const result = await fetchJson<ChannelStats>(url, signal)
+      const result = await fetchProviderJson<ChannelStats>(
+        provider.id,
+        url,
+        signal
+      )
       if (result.ok && !isEmptyStats(result.data)) {
         return {
           providerId: provider.id,

@@ -20,7 +20,9 @@ export function ProviderStatusList({
 
   const byId = new Map(providers.map((provider) => [provider.id, provider]))
   const ok = statuses.filter((item) => item.status === "ok").length
-  const errors = statuses.filter((item) => item.status === "error")
+  const errors = statuses.filter(
+    (item) => item.status === "error" && !item.skipped
+  )
 
   return (
     <Popover>
@@ -51,7 +53,7 @@ export function ProviderStatusList({
                   variant={
                     item.status === "ok"
                       ? "default"
-                      : item.status === "missing"
+                      : item.status === "missing" || item.skipped
                         ? "secondary"
                         : "destructive"
                   }
@@ -60,7 +62,9 @@ export function ProviderStatusList({
                     ? "hit"
                     : item.status === "missing"
                       ? "none"
-                      : "error"}
+                      : item.skipped
+                        ? "skipped"
+                        : "error"}
                 </Badge>
               </li>
             )

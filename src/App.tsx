@@ -1,7 +1,13 @@
 import { useMemo, useState } from "react"
+import { CircleAlertIcon, MessagesSquareIcon, SearchIcon } from "lucide-react"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { ChannelHeader } from "@/components/channel-header"
+import { EmptyState } from "@/components/empty-state"
+import {
+  LoadProgressView,
+  ProviderResultsList,
+} from "@/components/load-progress"
 import { LogsPanel } from "@/components/logs-panel"
 import { SettingsDialog } from "@/components/settings/settings-dialog"
 import { UserPanel } from "@/components/user-panel"
@@ -10,20 +16,21 @@ import { useChatCatalog } from "@/hooks/use-chat-catalog"
 import { useEmoteOptionsSync } from "@/hooks/use-emote-options-sync"
 import { useTwitchCosmetics } from "@/hooks/use-twitch-cosmetics"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useBookmarks } from "@/hooks/use-bookmarks"
 import { useChannel, useChannelStats } from "@/hooks/use-channel"
 import { useDayLogs } from "@/hooks/use-day-logs"
 import { useLogsQuery } from "@/hooks/use-logs-query"
+import { useProviderFailureWarnings } from "@/hooks/use-provider-failure-warnings"
 import { useProviders } from "@/hooks/use-providers"
 import type { AppTab } from "@/lib/query"
 import { parseTarget } from "@/lib/twitch"
 
 export function App() {
   const { query, setQuery, replaceQuery } = useLogsQuery()
-  const { enabled } = useProviders()
+  const { providers, enabled, setEnabled } = useProviders()
+  useProviderFailureWarnings(providers, setEnabled)
   const {
     bookmarks,
     add: addBookmark,
@@ -39,7 +46,11 @@ export function App() {
   }
 
   const channel = parseTarget(query.channel)?.value ?? ""
-  const meta = useChannel(channel, enabled)
+  const {
+    meta,
+    progress: metaProgress,
+    skip: skipMeta,
+  } = useChannel(channel, enabled)
   const dates = meta.status === "ready" ? meta.dates : []
   const effectiveDate =
     query.date && dates.includes(query.date) ? query.date : (dates[0] ?? "")
@@ -124,18 +135,44 @@ export function App() {
             />
 
             {!channel ? (
-              <EmptyCard text="Open a channel from the sidebar to start reading logs." />
+              <PaneCard>
+                <EmptyState
+                  icon={MessagesSquareIcon}
+                  title="No channel open"
+                  description="Pick a channel from the sidebar, or search for one, to start reading its logs."
+                />
+              </PaneCard>
             ) : null}
 
             {channel && meta.status === "loading" ? (
-              <div className="flex min-h-0 flex-1 flex-col rounded-xl border bg-card p-6">
-                <Skeleton className="h-5 w-64" />
-                <Skeleton className="mt-4 h-full w-full flex-1" />
-              </div>
+              <PaneCard>
+                <LoadProgressView
+                  icon={SearchIcon}
+                  title={`Finding logs for ${channel}`}
+                  providers={enabled}
+                  progress={metaProgress}
+                  fallbackIds={enabled.map((provider) => provider.id)}
+                  unit="day"
+                  onContinue={skipMeta}
+                />
+              </PaneCard>
             ) : null}
 
             {channel && meta.status === "error" ? (
-              <EmptyCard text={meta.message} />
+              <PaneCard>
+                <EmptyState
+                  icon={CircleAlertIcon}
+                  tone="error"
+                  title="Couldn't load this channel"
+                  description={meta.message}
+                >
+                  <ProviderResultsList
+                    providers={enabled}
+                    statuses={"statuses" in meta ? (meta.statuses ?? []) : []}
+                    unit="day"
+                  />
+                </EmptyState>
+              </PaneCard>
             ) : null}
 
             {meta.status === "ready" && query.tab === "logs" ? (
@@ -147,7 +184,10 @@ export function App() {
                   userFilter={query.user}
                   filterQuery={query.q}
                   logs={logs}
+                  logsProgress={dayLogs.progress}
+                  onSkipSlowProviders={dayLogs.skip}
                   logsProviders={enabled}
+                  loadingProviders={datedProviders}
                   onRefreshLogs={() => {
                     dayLogs.refresh()
                     refreshStats()
@@ -189,10 +229,10 @@ export function App() {
   )
 }
 
-function EmptyCard({ text }: { text: string }) {
+function PaneCard({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-0 flex-1 items-start rounded-xl border bg-card p-4">
-      <p className="text-sm text-muted-foreground">{text}</p>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card">
+      {children}
     </div>
   )
 }

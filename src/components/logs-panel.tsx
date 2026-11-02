@@ -3,7 +3,10 @@ import {
   ArrowDownWideNarrowIcon,
   ArrowUpNarrowWideIcon,
   CalendarDaysIcon,
+  CalendarSearchIcon,
   CheckIcon,
+  CircleAlertIcon,
+  ScrollTextIcon,
   CopyIcon,
   FileTextIcon,
   FilterIcon,
@@ -11,7 +14,12 @@ import {
   XIcon,
 } from "lucide-react"
 
+import { EmptyState } from "@/components/empty-state"
 import { LogCalendar } from "@/components/log-calendar"
+import {
+  LoadProgressView,
+  ProviderResultsList,
+} from "@/components/load-progress"
 import { LogUserCard } from "@/components/chat/user-card"
 import { LogViewer } from "@/components/log-viewer"
 import { Button } from "@/components/ui/button"
@@ -26,11 +34,17 @@ import { Skeleton } from "@/components/ui/skeleton"
 import type { ChatCatalog } from "@/hooks/use-chat-catalog"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
 import type { DayLogsState } from "@/hooks/use-day-logs"
+import { useFilteredMessages } from "@/hooks/use-filtered-messages"
+import type { LoadProgress } from "@/lib/load-progress"
 import { useSettings } from "@/hooks/use-settings"
 import { formatDateKey } from "@/lib/dates"
 import { copyText } from "@/lib/clipboard"
 import type { Provider } from "@/lib/providers"
-import { fetchRawChannelLogs, type RawLogBatch } from "@/lib/rustlog"
+import {
+  fetchRawChannelLogs,
+  type MergedMessage,
+  type RawLogBatch,
+} from "@/lib/rustlog"
 import {
   collectSearchUsernames,
   getSearchSuggestions,
@@ -39,8 +53,9 @@ import {
   isSearchQueryActive,
   removeSearchFilterRange,
   replaceSearchToken,
-  searchLogMessages,
 } from "@/lib/chat/search"
+
+const NO_MESSAGES: MergedMessage[] = []
 
 export function LogsPanel({
   channelLogin,
@@ -49,7 +64,10 @@ export function LogsPanel({
   userFilter,
   filterQuery,
   logs,
+  logsProgress,
+  onSkipSlowProviders,
   logsProviders,
+  loadingProviders,
   onRefreshLogs,
   refreshingLogs,
   catalog,
@@ -63,7 +81,11 @@ export function LogsPanel({
   userFilter: string
   filterQuery: string
   logs: DayLogsState
+  logsProgress: LoadProgress | null
+  onSkipSlowProviders: () => void
   logsProviders: Provider[]
+  /** Providers queried for this day, a subset of logsProviders. */
+  loadingProviders: Provider[]
   onRefreshLogs: () => void
   refreshingLogs: boolean
   catalog: ChatCatalog
@@ -93,7 +115,7 @@ export function LogsPanel({
     }))
   }
 
-  const messages = logs.status === "ready" ? logs.messages : []
+  const messages = logs.status === "ready" ? logs.messages : NO_MESSAGES
 
   const rawKey = `${channelLogin}|${date}|${logsProviders
     .map((provider) => provider.id)
@@ -159,20 +181,17 @@ export function LogsPanel({
   // suggestions, and filter chips immediately.
   const FILTER_SETTLE_MS = 200
   const settledFilterQuery = useDebouncedValue(filterQuery, FILTER_SETTLE_MS)
-  const emotes = catalog.emotes
-  const filtered = useMemo(
-    () =>
-      logs.status === "ready"
-        ? searchLogMessages(
-            logs.messages,
-            settledFilterQuery,
-            userFilter,
-            emotes
-          )
-        : [],
-    [logs, emotes, settledFilterQuery, userFilter]
+  const {
+    filtered,
+    pending: scanPending,
+    slow: scanSlow,
+  } = useFilteredMessages(
+    messages,
+    settledFilterQuery,
+    userFilter,
+    catalog.emotes
   )
-  const filterPending = settledFilterQuery !== filterQuery
+  const filterPending = settledFilterQuery !== filterQuery || scanPending
   const [caret, setCaret] = useState(filterQuery.length)
 
   function updateCaret(next: number) {
@@ -456,18 +475,46 @@ export function LogsPanel({
 
       <LogWell>
         {logs.status === "loading" ? (
-          <div className="flex flex-1 flex-col gap-2 px-4 py-4">
-            <Skeleton className="h-5 w-full" />
-            <Skeleton className="h-5 w-11/12" />
-            <Skeleton className="h-5 w-4/5" />
-            <Skeleton className="h-5 w-full" />
-          </div>
+          <LoadProgressView
+            icon={ScrollTextIcon}
+            title={`Loading ${date ? formatDateKey(date) : "logs"}`}
+            providers={logsProviders}
+            progress={logsProgress}
+            fallbackIds={loadingProviders.map((provider) => provider.id)}
+            unit="message"
+            onContinue={onSkipSlowProviders}
+            skippedIds={logsProviders
+              .filter(
+                (provider) =>
+                  !loadingProviders.some((item) => item.id === provider.id)
+              )
+              .map((provider) => provider.id)}
+          />
         ) : null}
 
         {logs.status === "error" ? (
-          <p className="px-4 py-4 text-sm text-muted-foreground">
-            {logs.message}
-          </p>
+          <EmptyState
+            icon={CircleAlertIcon}
+            tone="error"
+            title="Couldn't load this day"
+            description={logs.message}
+          >
+            <ProviderResultsList
+              providers={logsProviders}
+              statuses={logs.statuses ?? []}
+              unit="message"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-1 rounded-full"
+              onClick={onRefreshLogs}
+            >
+              <RefreshCwIcon className={cn(refreshingLogs && "animate-spin")} />
+              Try again
+            </Button>
+          </EmptyState>
         ) : null}
 
         {logs.status === "ready" && rawOpen ? (
@@ -516,30 +563,35 @@ export function LogsPanel({
             </div>
           </div>
         ) : logs.status === "ready" ? (
-          <LogViewer
-            key={`${channelLogin}|${date}`}
-            messages={queryActive ? filtered : messages}
-            contextMessages={messages}
-            isFiltered={visibleCount !== logs.messages.length}
-            onClearFilters={() => {
-              if (filterQuery.trim()) {
-                onFilterQuery("")
-              }
-              if (userFilter) {
-                onUserFilter("")
-              }
-            }}
-            total={logs.messages.length}
-            badges={catalog.badges}
-            emotes={catalog.emotes}
-            newestAtBottom={newestAtBottom}
-          />
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            <LogViewer
+              key={`${channelLogin}|${date}`}
+              messages={queryActive ? filtered : messages}
+              contextMessages={messages}
+              isFiltered={visibleCount !== logs.messages.length}
+              onClearFilters={() => {
+                if (filterQuery.trim()) {
+                  onFilterQuery("")
+                }
+                if (userFilter) {
+                  onUserFilter("")
+                }
+              }}
+              total={logs.messages.length}
+              badges={catalog.badges}
+              emotes={catalog.emotes}
+              newestAtBottom={newestAtBottom}
+            />
+            {queryActive && scanSlow ? <FilterSkeleton /> : null}
+          </div>
         ) : null}
 
         {logs.status === "idle" ? (
-          <p className="px-4 py-4 text-sm text-muted-foreground">
-            Pick a day from the calendar to load chat.
-          </p>
+          <EmptyState
+            icon={CalendarSearchIcon}
+            title="No day selected"
+            description="Pick a day from the calendar to load chat."
+          />
         ) : null}
       </LogWell>
 
@@ -549,6 +601,25 @@ export function LogsPanel({
         emotes={catalog.emotes}
         onFilterUser={onUserFilter}
       />
+    </div>
+  )
+}
+
+/**
+ * Covers the list while a slow filter scan runs. The viewer stays mounted
+ * underneath so its scroll position survives.
+ */
+function FilterSkeleton() {
+  const widths = ["w-full", "w-11/12", "w-4/5", "w-full", "w-3/4", "w-10/12"]
+  return (
+    <div
+      className="chat-panel absolute inset-0 flex flex-col gap-2 px-4 py-4"
+      aria-busy
+      aria-label="Filtering messages"
+    >
+      {widths.map((width, index) => (
+        <Skeleton key={index} className={cn("h-5", width)} />
+      ))}
     </div>
   )
 }

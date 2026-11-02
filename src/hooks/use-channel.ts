@@ -2,6 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { rememberChannelIdentity } from "@/lib/channel-identity"
 import { fromDateKey } from "@/lib/dates"
+import {
+  recordProviderResult,
+  startProgress,
+  type LoadProgress,
+} from "@/lib/load-progress"
 import type { Provider } from "@/lib/providers"
 import {
   discoverAvailableLogs,
@@ -50,6 +55,17 @@ export function useChannel(channel: string, providers: Provider[]) {
     status: "idle",
   })
   const key = `${login}|${providers.map((provider) => provider.id).join(",")}`
+  const [progress, setProgress] = useState<LoadProgress | null>(null)
+  const skipRef = useRef<{ key: string; controller: AbortController } | null>(
+    null
+  )
+
+  /** Stop waiting on slow providers and use the days found so far. */
+  const skip = useCallback(() => {
+    if (skipRef.current?.key === key) {
+      skipRef.current.controller.abort()
+    }
+  }, [key])
 
   useEffect(() => {
     if (!login) {
@@ -60,6 +76,8 @@ export function useChannel(channel: string, providers: Provider[]) {
     }
 
     const controller = new AbortController()
+    const skipController = new AbortController()
+    skipRef.current = { key, controller: skipController }
     let cancelled = false
 
     async function run() {
@@ -69,15 +87,44 @@ export function useChannel(channel: string, providers: Provider[]) {
       }
 
       setState({ key, status: "loading" })
+      setProgress(
+        startProgress(
+          key,
+          providers.map((provider) => provider.id),
+          { profile: "pending" }
+        )
+      )
       try {
         const [profile, discovery] = await Promise.all([
-          fetchTwitchUser(login, controller.signal).then((user) => {
+          whenNotSkipped(
+            fetchTwitchUser(login, controller.signal),
+            skipController.signal,
+            null
+          ).then((user) => {
             if (user) {
               rememberChannelIdentity(user)
             }
+            if (!cancelled) {
+              setProgress((current) =>
+                current?.key === key ? { ...current, profile: "done" } : current
+              )
+            }
             return user
           }),
-          discoverAvailableLogs(providers, login, controller.signal),
+          discoverAvailableLogs(
+            providers,
+            login,
+            controller.signal,
+            (item) => {
+              if (!cancelled) {
+                setProgress(
+                  (current) =>
+                    current && recordProviderResult(current, key, item)
+                )
+              }
+            },
+            skipController.signal
+          ),
         ])
         if (cancelled) {
           return
@@ -132,18 +179,33 @@ export function useChannel(channel: string, providers: Provider[]) {
   }, [key, login, providers])
 
   if (!login) {
-    return IDLE
+    return { meta: IDLE, progress: null, skip }
   }
 
   if (providers.length === 0) {
-    return NO_PROVIDERS
+    return { meta: NO_PROVIDERS, progress: null, skip }
   }
 
-  if (state.status === "idle" || state.key !== key) {
-    return LOADING
+  return {
+    skip,
+    meta: state.status === "idle" || state.key !== key ? LOADING : state,
+    progress: progress?.key === key ? progress : null,
   }
+}
 
-  return state
+/** Resolves to `fallback` once `skip` aborts, if `promise` is still pending. */
+function whenNotSkipped<T>(
+  promise: Promise<T>,
+  skip: AbortSignal,
+  fallback: T
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const onSkip = () => resolve(fallback)
+    skip.addEventListener("abort", onSkip, { once: true })
+    promise.then(resolve, reject).finally(() => {
+      skip.removeEventListener("abort", onSkip)
+    })
+  })
 }
 
 export function useChannelStats(

@@ -7,9 +7,15 @@ import {
   useState,
 } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
-import { ArrowDownToLineIcon, ArrowUpToLineIcon } from "lucide-react"
+import {
+  ArrowDownToLineIcon,
+  ArrowUpToLineIcon,
+  MessageSquareOffIcon,
+  SearchXIcon,
+} from "lucide-react"
 
 import { ChatHoverTooltipProvider } from "@/components/chat/hover-tooltip"
+import { EmptyState } from "@/components/empty-state"
 import { LogMessage } from "@/components/log-message"
 import { Button } from "@/components/ui/button"
 import type { ChatBadgeCatalog } from "@/lib/chat/badges"
@@ -214,17 +220,33 @@ export function LogViewer({
 
   if (total === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        No messages for this day.
-      </div>
+      <EmptyState
+        icon={MessageSquareOffIcon}
+        title="No messages"
+        description="Nothing was logged in this channel on this day."
+      />
     )
   }
 
   if (messages.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        No messages match that filter.
-      </div>
+      <EmptyState
+        icon={SearchXIcon}
+        title="No matches"
+        description="No messages match that filter."
+      >
+        {onClearFilters ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-1 rounded-full"
+            onClick={onClearFilters}
+          >
+            Clear filters
+          </Button>
+        ) : null}
+      </EmptyState>
     )
   }
 

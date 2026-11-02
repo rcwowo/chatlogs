@@ -388,16 +388,40 @@ function messageHasKind(
   }
 }
 
+export type LogMessageMatcher =
+  | { kind: "all" }
+  | { kind: "none" }
+  | { kind: "some"; test: (message: MergedMessage) => boolean }
+
 export function searchLogMessages(
   messages: MergedMessage[],
   query: string,
   senderFilter = "",
   emotes: ThirdPartyEmoteCatalog | null = null
 ): MergedMessage[] {
+  const matcher = createLogMessageMatcher(query, senderFilter, emotes)
+  if (matcher.kind === "all") {
+    return messages
+  }
+  if (matcher.kind === "none") {
+    return []
+  }
+  return messages.filter(matcher.test)
+}
+
+/**
+ * Builds the per-message test for a query so callers can scan large lists in
+ * chunks instead of one blocking pass.
+ */
+export function createLogMessageMatcher(
+  query: string,
+  senderFilter = "",
+  emotes: ThirdPartyEmoteCatalog | null = null
+): LogMessageMatcher {
   const parsed = parseSearchQuery(query)
   const sender = senderFilter.trim()
   if (!isSearchQueryActive(parsed) && !sender) {
-    return messages
+    return { kind: "all" }
   }
 
   const fromNeedles = new Set<string>()
@@ -444,12 +468,12 @@ export function searchLogMessages(
     (roleActive && roleKinds.length === 0) ||
     (hasActive && hasKinds.length === 0)
   ) {
-    return []
+    return { kind: "none" }
   }
 
   const lowerKeywords = parsed.keywords.map((keyword) => keyword.toLowerCase())
 
-  return messages.filter((message) => {
+  const test = (message: MergedMessage) => {
     if (fromActive) {
       const username = message.username.toLowerCase()
       const displayName = message.displayName.toLowerCase()
@@ -510,7 +534,9 @@ export function searchLogMessages(
     }
 
     return true
-  })
+  }
+
+  return { kind: "some", test }
 }
 
 export function collectSearchUsernames(
