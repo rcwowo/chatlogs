@@ -11,8 +11,6 @@ export type Provider = {
 export const BUILTIN_PROVIDERS: Array<Omit<Provider, "enabled" | "builtin">> = [
   { id: "ivr", name: "IVR", url: "https://logs.ivr.fi" },
   { id: "logxx", name: "Logxx", url: "https://logxx.dev" },
-  { id: "spanix", name: "Spanix", url: "https://logs.spanix.team" },
-  { id: "rcw-lab", name: "RCW Lab", url: "https://logs.lab.rcw.lol" },
 ]
 
 export function getProvidersFromSettings(
