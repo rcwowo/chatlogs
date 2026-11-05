@@ -1,5 +1,9 @@
 import { readJson, writeJson } from "@/lib/storage"
-import { BUILTIN_PROVIDERS, normalizeEndpoint } from "@/lib/providers"
+import {
+  BUILTIN_PROVIDERS,
+  getProvidersFromSettings,
+  normalizeEndpoint,
+} from "@/lib/providers"
 
 export const SETTINGS_STORAGE_KEY = "chatlogs::config"
 export const SETTINGS_SCHEMA_VERSION = 1
@@ -46,7 +50,10 @@ export type CustomProvider = {
 }
 
 export type ProvidersConfig = {
+  /** Built-ins that are on by default but turned off. */
   disabledBuiltin: string[]
+  /** Built-ins that are off by default but turned on. */
+  enabledBuiltin: string[]
   custom: CustomProvider[]
 }
 
@@ -90,6 +97,7 @@ export function createDefaultSettings(): Settings {
     },
     providers: {
       disabledBuiltin: [],
+      enabledBuiltin: [],
       custom: [],
     },
   }
@@ -212,23 +220,43 @@ function normalizeCustomProvider(raw: unknown): CustomProvider | null {
   }
 }
 
+function asIdList(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter(
+        (id): id is string => typeof id === "string" && id.length > 0
+      )
+    : []
+}
+
 function normalizeProviders(raw: unknown): ProvidersConfig {
   const source = (typeof raw === "object" && raw !== null ? raw : {}) as Record<
     string,
     unknown
   >
-  const custom = Array.isArray(source.custom)
-    ? source.custom
-        .map(normalizeCustomProvider)
-        .filter((provider): provider is CustomProvider => provider !== null)
-    : []
-  const disabledBuiltin = Array.isArray(source.disabledBuiltin)
-    ? source.disabledBuiltin.filter(
-        (id): id is string => typeof id === "string" && id.length > 0
-      )
-    : []
+  const custom: CustomProvider[] = []
+  const disabledBuiltin = new Set(asIdList(source.disabledBuiltin))
+  const enabledBuiltin = new Set(asIdList(source.enabledBuiltin))
+  const rawCustom = Array.isArray(source.custom) ? source.custom : []
+  for (const provider of rawCustom.map(normalizeCustomProvider)) {
+    if (!provider) {
+      continue
+    }
+    // Endpoints added by hand before they became built-in fold into the
+    // built-in entry, keeping whether they were switched on.
+    const builtin = BUILTIN_PROVIDERS.find((item) => item.url === provider.url)
+    if (!builtin) {
+      custom.push(provider)
+    } else if (provider.enabled) {
+      disabledBuiltin.delete(builtin.id)
+      enabledBuiltin.add(builtin.id)
+    }
+  }
 
-  return { disabledBuiltin, custom }
+  return {
+    disabledBuiltin: [...disabledBuiltin],
+    enabledBuiltin: [...enabledBuiltin],
+    custom,
+  }
 }
 
 export function normalizeSettings(raw: unknown): Settings {
@@ -390,10 +418,13 @@ export function setProviderEnabledInSettings(
   }
 
   const disabledBuiltin = new Set(settings.providers.disabledBuiltin)
+  const enabledBuiltin = new Set(settings.providers.enabledBuiltin)
   if (enabled) {
     disabledBuiltin.delete(id)
+    enabledBuiltin.add(id)
   } else {
     disabledBuiltin.add(id)
+    enabledBuiltin.delete(id)
   }
   return {
     ...settings,
@@ -401,6 +432,7 @@ export function setProviderEnabledInSettings(
     providers: {
       ...settings.providers,
       disabledBuiltin: [...disabledBuiltin],
+      enabledBuiltin: [...enabledBuiltin],
     },
   }
 }
@@ -446,19 +478,36 @@ function hasProviderUrl(settings: Settings, url: string) {
   )
 }
 
-/** Adds every new URL and reports the ones already in the list. */
+/**
+ * Adds every new URL, switches on listed ones that are off, and reports the
+ * ones already in use.
+ */
 export function addCustomProvidersToSettings(
   settings: Settings,
   entries: Array<{ name: string; url: string }>
-): { settings: Settings; added: CustomProvider[]; existing: string[] } {
+): {
+  settings: Settings
+  added: CustomProvider[]
+  enabled: string[]
+  existing: string[]
+} {
   const added: CustomProvider[] = []
+  const enabled: string[] = []
   const existing: string[] = []
   let next = settings
 
   for (const entry of entries) {
     const url = normalizeEndpoint(entry.url)
-    if (hasProviderUrl(next, url)) {
+    const listed = getProvidersFromSettings(next).find(
+      (provider) => provider.url.replace(/\/+$/, "") === url
+    )
+    if (listed?.enabled) {
       existing.push(url)
+      continue
+    }
+    if (listed) {
+      next = setProviderEnabledInSettings(next, listed.id, true)
+      enabled.push(url)
       continue
     }
     const result = addCustomProviderToSettings(next, entry.name, url)
@@ -466,7 +515,7 @@ export function addCustomProvidersToSettings(
     added.push(result.provider)
   }
 
-  return { settings: next, added, existing }
+  return { settings: next, added, enabled, existing }
 }
 
 export function removeCustomProviderFromSettings(

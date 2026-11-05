@@ -49,14 +49,15 @@ export function useProviders() {
 
   const addMany = useCallback(
     (entries: Array<{ name: string; url: string }>) => {
-      let counts = { added: 0, existing: 0 }
+      let counts = { added: 0, enabled: 0, existing: 0 }
       updateSettings((current) => {
         const result = addCustomProvidersToSettings(current, entries)
         counts = {
           added: result.added.length,
+          enabled: result.enabled.length,
           existing: result.existing.length,
         }
-        return result.added.length > 0 ? result.settings : current
+        return counts.added + counts.enabled > 0 ? result.settings : current
       })
       return counts
     },

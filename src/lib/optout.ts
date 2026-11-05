@@ -10,49 +10,15 @@ const RECENT_LOGS_MS = 30 * 24 * 60 * 60 * 1000
 
 const REQUEST_MS = 15_000
 
-/** Public instances listed on https://bestlogs.lurkology.com/status. */
-const KNOWN_SERVICE_URLS = [
-  "https://harambelogs.pl",
-  "https://logs.cyex.app",
-  "https://logs.folhinhabot.com",
-  "https://logs.ivr.fi",
-  "https://logs.jimmyboy.dev",
-  "https://logs.lotuslabs.dev",
-  "https://logs.mrchuw.com.br",
-  "https://logs.nadeko.net",
-  "https://logs.potat.app",
-  "https://logs.spanix.team",
-  "https://logs.supa.codes",
-  "https://logs.susgee.dev",
-  "https://logs.twitchmetrics.xyz",
-  "https://vtlogs.moe",
-]
-
 export type OptoutService = {
   id: string
   name: string
   url: string
 }
 
-/** The app's providers plus every known public instance, without repeats. */
+/** Every listed provider, including the ones switched off for browsing. */
 export function getOptoutServices(providers: Provider[]): OptoutService[] {
-  const services: OptoutService[] = providers.map(({ id, name, url }) => ({
-    id,
-    name,
-    url,
-  }))
-  const urls = new Set(services.map((service) => service.url))
-  for (const url of KNOWN_SERVICE_URLS) {
-    if (!urls.has(url)) {
-      urls.add(url)
-      services.push({
-        id: `known:${url}`,
-        name: providerNameFromUrl(url),
-        url,
-      })
-    }
-  }
-  return services
+  return providers.map(({ id, name, url }) => ({ id, name, url }))
 }
 
 export type LoggerKind = "rustlog" | "justlog"

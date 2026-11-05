@@ -349,6 +349,7 @@ function BulkAdd({
 }: {
   onAdd: (entries: Array<{ name: string; url: string }>) => {
     added: number
+    enabled: number
     existing: number
   }
 }) {
@@ -381,7 +382,7 @@ function BulkAdd({
       return
     }
 
-    let result: { added: number; existing: number }
+    let result: { added: number; enabled: number; existing: number }
     try {
       result = onAdd(
         urls.map((url) => ({ name: providerNameFromUrl(url), url }))
@@ -396,6 +397,9 @@ function BulkAdd({
     const count = (value: number, one: string, many: string) =>
       `${value} ${value === 1 ? one : many}`
     const notes = [
+      result.added > 0 && result.enabled > 0
+        ? `${count(result.enabled, "listed service was", "listed services were")} switched on`
+        : "",
       result.existing > 0
         ? `${result.existing} ${result.existing === 1 ? "was" : "were"} already added`
         : "",
@@ -403,12 +407,15 @@ function BulkAdd({
         ? `${count(invalid.length, "invalid entry was", "invalid entries were")} left in the box`
         : "",
     ].filter(Boolean)
+    const changed = result.added + result.enabled > 0
     const summary =
       result.added > 0
         ? `Added ${count(result.added, "service", "services")}`
-        : "No new services added"
+        : result.enabled > 0
+          ? `Switched on ${count(result.enabled, "service", "services")}`
+          : "No new services added"
     const description = notes.join(", ") || undefined
-    if (result.added > 0) {
+    if (changed) {
       toast.success(summary, { description })
     } else {
       toast.info(summary, { description })
