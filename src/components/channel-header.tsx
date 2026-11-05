@@ -1,8 +1,22 @@
 import { useState } from "react"
-import { BookmarkIcon, SquareArrowOutUpRightIcon } from "lucide-react"
+import {
+  BookmarkIcon,
+  ChevronDownIcon,
+  EyeOffIcon,
+  MessageSquareIcon,
+  SquareArrowOutUpRightIcon,
+  VideoIcon,
+} from "lucide-react"
 
 import { ChannelAvatar } from "@/components/channel-avatar"
+import { ChatterOptoutDialog } from "@/components/chatter-optout-dialog"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import {
   Tabs,
@@ -20,6 +34,7 @@ import { cn } from "@/lib/utils"
 import { twitchChannelUrl } from "@/lib/chat/types"
 import { parseTarget } from "@/lib/twitch"
 import type { AppTab } from "@/lib/query"
+import { navigate, OPTOUT_PATH } from "@/lib/routes"
 
 const headerChip =
   "rounded-full bg-muted text-muted-foreground hover:text-foreground"
@@ -104,6 +119,7 @@ export function ChannelHeader({
       </Tabs>
 
       <div className="ml-auto flex items-center gap-2">
+        <OptoutMenu channel={channel} />
         <Button
           type="button"
           size="icon"
@@ -137,6 +153,67 @@ export function ChannelHeader({
         </Button>
       </div>
     </header>
+  )
+}
+
+function OptoutMenu({ channel }: { channel: string }) {
+  const [chatterOpen, setChatterOpen] = useState(false)
+
+  return (
+    <>
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              className={cn(headerChip, "gap-1.5 px-3 pl-2.5")}
+            />
+          }
+        >
+          <EyeOffIcon />
+          Opt out
+          <ChevronDownIcon className="size-3.5 opacity-70" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuItem onClick={() => navigate(OPTOUT_PATH)}>
+            <VideoIcon />
+            <OptoutMenuLabel
+              title="As a streamer"
+              detail="Stop logging your channel"
+            />
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!channel}
+            onClick={() => setChatterOpen(true)}
+          >
+            <MessageSquareIcon />
+            <OptoutMenuLabel
+              title="As a chatter"
+              detail={
+                channel
+                  ? `Remove yourself from #${channel}'s logs`
+                  : "Open a channel first"
+              }
+            />
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <ChatterOptoutDialog
+        channel={channel}
+        open={chatterOpen && Boolean(channel)}
+        onOpenChange={setChatterOpen}
+      />
+    </>
+  )
+}
+
+function OptoutMenuLabel({ title, detail }: { title: string; detail: string }) {
+  return (
+    <span className="flex min-w-0 flex-col">
+      <span>{title}</span>
+      <span className="truncate text-xs text-muted-foreground">{detail}</span>
+    </span>
   )
 }
 

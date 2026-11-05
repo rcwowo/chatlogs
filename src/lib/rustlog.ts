@@ -74,7 +74,7 @@ function rustlogPath(target: NamedTarget, kind: "channel" | "user") {
     : `user/${encodeURIComponent(target.value)}`
 }
 
-function buildUrl(
+export function buildUrl(
   base: string,
   path: string,
   query: Record<string, string | undefined> = {}

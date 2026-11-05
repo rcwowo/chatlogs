@@ -421,12 +421,7 @@ export function addCustomProviderToSettings(
     throw new Error("Give the endpoint a name.")
   }
 
-  const duplicateUrl = (item: { url: string }) =>
-    item.url.replace(/\/+$/, "") === provider.url
-  const exists =
-    BUILTIN_PROVIDERS.some(duplicateUrl) ||
-    settings.providers.custom.some(duplicateUrl)
-  if (exists) {
+  if (hasProviderUrl(settings, provider.url)) {
     throw new Error("That endpoint is already in the list.")
   }
 
@@ -441,6 +436,37 @@ export function addCustomProviderToSettings(
     },
     provider,
   }
+}
+
+function hasProviderUrl(settings: Settings, url: string) {
+  const matches = (item: { url: string }) =>
+    item.url.replace(/\/+$/, "") === url
+  return (
+    BUILTIN_PROVIDERS.some(matches) || settings.providers.custom.some(matches)
+  )
+}
+
+/** Adds every new URL and reports the ones already in the list. */
+export function addCustomProvidersToSettings(
+  settings: Settings,
+  entries: Array<{ name: string; url: string }>
+): { settings: Settings; added: CustomProvider[]; existing: string[] } {
+  const added: CustomProvider[] = []
+  const existing: string[] = []
+  let next = settings
+
+  for (const entry of entries) {
+    const url = normalizeEndpoint(entry.url)
+    if (hasProviderUrl(next, url)) {
+      existing.push(url)
+      continue
+    }
+    const result = addCustomProviderToSettings(next, entry.name, url)
+    next = result.settings
+    added.push(result.provider)
+  }
+
+  return { settings: next, added, existing }
 }
 
 export function removeCustomProviderFromSettings(

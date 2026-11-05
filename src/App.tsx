@@ -9,6 +9,7 @@ import {
   ProviderResultsList,
 } from "@/components/load-progress"
 import { LogsPanel } from "@/components/logs-panel"
+import { OptoutPage } from "@/components/optout-page"
 import { SettingsDialog } from "@/components/settings/settings-dialog"
 import { UserPanel } from "@/components/user-panel"
 import { UserCardProvider } from "@/hooks/use-user-card"
@@ -25,9 +26,21 @@ import { useLogsQuery } from "@/hooks/use-logs-query"
 import { useProviderFailureWarnings } from "@/hooks/use-provider-failure-warnings"
 import { useProviders } from "@/hooks/use-providers"
 import type { AppTab } from "@/lib/query"
+import { useRoute } from "@/lib/routes"
 import { parseTarget } from "@/lib/twitch"
 
 export function App() {
+  const route = useRoute()
+
+  return (
+    <TooltipProvider>
+      {route === "optout" ? <OptoutPage /> : <LogsPage />}
+      <Toaster />
+    </TooltipProvider>
+  )
+}
+
+function LogsPage() {
   const { query, setQuery, replaceQuery } = useLogsQuery()
   const { providers, enabled, setEnabled } = useProviders()
   useProviderFailureWarnings(providers, setEnabled)
@@ -112,120 +125,115 @@ export function App() {
   }
 
   return (
-    <TooltipProvider>
-      <SidebarProvider>
-        <AppSidebar
-          channel={channel}
-          bookmarks={bookmarks}
-          onOpenChannel={openChannel}
-          onRemoveBookmark={removeBookmark}
-          onMoveBookmark={moveBookmark}
-          onOpenSettings={openSettings}
-        />
-        <SidebarInset className="h-svh overflow-hidden">
-          <div className="flex h-full min-h-0 flex-1 flex-col gap-4 p-6">
-            <ChannelHeader
-              tab={query.tab}
-              channel={channel}
-              bookmarked={has(channel)}
-              canBookmark={Boolean(channel)}
-              onTabChange={(tab: AppTab) => setQuery({ tab })}
-              onToggleBookmark={toggleBookmark}
-              onOpenChannel={openChannel}
-            />
+    <SidebarProvider>
+      <AppSidebar
+        channel={channel}
+        bookmarks={bookmarks}
+        onOpenChannel={openChannel}
+        onRemoveBookmark={removeBookmark}
+        onMoveBookmark={moveBookmark}
+        onOpenSettings={openSettings}
+      />
+      <SidebarInset className="h-svh overflow-hidden">
+        <div className="flex h-full min-h-0 flex-1 flex-col gap-4 p-6">
+          <ChannelHeader
+            tab={query.tab}
+            channel={channel}
+            bookmarked={has(channel)}
+            canBookmark={Boolean(channel)}
+            onTabChange={(tab: AppTab) => setQuery({ tab })}
+            onToggleBookmark={toggleBookmark}
+            onOpenChannel={openChannel}
+          />
 
-            {!channel ? (
-              <PaneCard>
-                <EmptyState
-                  icon={MessagesSquareIcon}
-                  title="No channel open"
-                  description="Pick a channel from the sidebar, or search for one, to start reading its logs."
-                />
-              </PaneCard>
-            ) : null}
-
-            {channel && meta.status === "loading" ? (
-              <PaneCard>
-                <LoadProgressView
-                  icon={SearchIcon}
-                  title={`Finding logs for ${channel}`}
-                  providers={enabled}
-                  progress={metaProgress}
-                  fallbackIds={enabled.map((provider) => provider.id)}
-                  unit="day"
-                  onContinue={skipMeta}
-                />
-              </PaneCard>
-            ) : null}
-
-            {channel && meta.status === "error" ? (
-              <PaneCard>
-                <EmptyState
-                  icon={CircleAlertIcon}
-                  tone="error"
-                  title="Couldn't load this channel"
-                  description={meta.message}
-                >
-                  <ProviderResultsList
-                    providers={enabled}
-                    statuses={"statuses" in meta ? (meta.statuses ?? []) : []}
-                    unit="day"
-                  />
-                </EmptyState>
-              </PaneCard>
-            ) : null}
-
-            {meta.status === "ready" && query.tab === "logs" ? (
-              <UserCardProvider>
-                <LogsPanel
-                  channelLogin={channel}
-                  date={effectiveDate}
-                  dates={dates}
-                  userFilter={query.user}
-                  filterQuery={query.q}
-                  logs={logs}
-                  logsProgress={dayLogs.progress}
-                  onSkipSlowProviders={dayLogs.skip}
-                  logsProviders={enabled}
-                  loadingProviders={datedProviders}
-                  onRefreshLogs={() => {
-                    dayLogs.refresh()
-                    refreshStats()
-                  }}
-                  refreshingLogs={dayLogs.refreshing}
-                  catalog={catalog}
-                  onUserFilter={(user) => setQuery({ user })}
-                  onFilterQuery={(q) => setQuery({ q })}
-                  onDateChange={(date) => setQuery({ date, tab: "logs" })}
-                />
-              </UserCardProvider>
-            ) : null}
-
-            {meta.status === "ready" && query.tab === "user" ? (
-              <UserPanel
-                login={channel}
-                profile={meta.profile}
-                dates={meta.dates}
-                stats={stats.status === "ready" ? stats.stats : null}
-                statsLoading={stats.status === "loading"}
-                providers={enabled}
-                statuses={stats.status === "ready" ? stats.statuses : []}
-                cosmetics={
-                  cosmetics.status === "ready" ? cosmetics.cosmetics : null
-                }
-                cosmeticsLoading={cosmetics.status === "loading"}
-                onChatterClick={(login) =>
-                  setQuery({ tab: "logs", user: login })
-                }
+          {!channel ? (
+            <PaneCard>
+              <EmptyState
+                icon={MessagesSquareIcon}
+                title="No channel open"
+                description="Pick a channel from the sidebar, or search for one, to start reading its logs."
               />
-            ) : null}
-          </div>
-        </SidebarInset>
+            </PaneCard>
+          ) : null}
 
-        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-      </SidebarProvider>
-      <Toaster />
-    </TooltipProvider>
+          {channel && meta.status === "loading" ? (
+            <PaneCard>
+              <LoadProgressView
+                icon={SearchIcon}
+                title={`Finding logs for ${channel}`}
+                providers={enabled}
+                progress={metaProgress}
+                fallbackIds={enabled.map((provider) => provider.id)}
+                unit="day"
+                onContinue={skipMeta}
+              />
+            </PaneCard>
+          ) : null}
+
+          {channel && meta.status === "error" ? (
+            <PaneCard>
+              <EmptyState
+                icon={CircleAlertIcon}
+                tone="error"
+                title="Couldn't load this channel"
+                description={meta.message}
+              >
+                <ProviderResultsList
+                  providers={enabled}
+                  statuses={"statuses" in meta ? (meta.statuses ?? []) : []}
+                  unit="day"
+                />
+              </EmptyState>
+            </PaneCard>
+          ) : null}
+
+          {meta.status === "ready" && query.tab === "logs" ? (
+            <UserCardProvider>
+              <LogsPanel
+                channelLogin={channel}
+                date={effectiveDate}
+                dates={dates}
+                userFilter={query.user}
+                filterQuery={query.q}
+                logs={logs}
+                logsProgress={dayLogs.progress}
+                onSkipSlowProviders={dayLogs.skip}
+                logsProviders={enabled}
+                loadingProviders={datedProviders}
+                onRefreshLogs={() => {
+                  dayLogs.refresh()
+                  refreshStats()
+                }}
+                refreshingLogs={dayLogs.refreshing}
+                catalog={catalog}
+                onUserFilter={(user) => setQuery({ user })}
+                onFilterQuery={(q) => setQuery({ q })}
+                onDateChange={(date) => setQuery({ date, tab: "logs" })}
+              />
+            </UserCardProvider>
+          ) : null}
+
+          {meta.status === "ready" && query.tab === "user" ? (
+            <UserPanel
+              login={channel}
+              profile={meta.profile}
+              dates={meta.dates}
+              stats={stats.status === "ready" ? stats.stats : null}
+              statsLoading={stats.status === "loading"}
+              providers={enabled}
+              statuses={stats.status === "ready" ? stats.statuses : []}
+              cosmetics={
+                cosmetics.status === "ready" ? cosmetics.cosmetics : null
+              }
+              cosmeticsLoading={cosmetics.status === "loading"}
+              onChatterClick={(login) => setQuery({ tab: "logs", user: login })}
+            />
+          ) : null}
+        </div>
+      </SidebarInset>
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+    </SidebarProvider>
   )
 }
 

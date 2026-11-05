@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react"
 
 import {
   addCustomProviderToSettings,
+  addCustomProvidersToSettings,
   setProviderEnabledInSettings,
   removeCustomProviderFromSettings,
   type CustomProvider,
@@ -46,6 +47,22 @@ export function useProviders() {
     [updateSettings]
   )
 
+  const addMany = useCallback(
+    (entries: Array<{ name: string; url: string }>) => {
+      let counts = { added: 0, existing: 0 }
+      updateSettings((current) => {
+        const result = addCustomProvidersToSettings(current, entries)
+        counts = {
+          added: result.added.length,
+          existing: result.existing.length,
+        }
+        return result.added.length > 0 ? result.settings : current
+      })
+      return counts
+    },
+    [updateSettings]
+  )
+
   const remove = useCallback(
     (id: string) => {
       updateSettings((current) => removeCustomProviderFromSettings(current, id))
@@ -53,7 +70,7 @@ export function useProviders() {
     [updateSettings]
   )
 
-  return { providers, enabled, setEnabled, add, remove }
+  return { providers, enabled, setEnabled, add, addMany, remove }
 }
 
 export type { Provider }
